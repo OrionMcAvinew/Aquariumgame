@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Fin &amp; Fortune — Aquarium Store Sim</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-icon">🐠</span>
+      <h1>Fin &amp; Fortune</h1>
+    </div>
+    <div class="hud">
+      <div class="hud-item" title="Cash">💰 <span id="hud-cash">$0</span></div>
+      <div class="hud-item" title="Reputation">⭐ <span id="hud-rep">0</span></div>
+      <div class="hud-item" title="Day">
+        📅 Day <span id="hud-day">1</span>
+        <div class="day-progress"><div id="day-progress-fill"></div></div>
+      </div>
+    </div>
+    <div class="topbar-actions">
+      <button id="btn-help" class="btn btn-ghost">How to play</button>
+      <button id="btn-reset" class="btn btn-ghost btn-danger">Reset</button>
+    </div>
+  </header>
+
+  <section class="customers-bar">
+    <div class="customers-label">Customers</div>
+    <div id="customer-queue" class="customer-queue">
+      <div class="customer-empty" id="customer-empty">The shop is quiet… for now.</div>
+    </div>
+  </section>
+
+  <main class="layout">
+    <section class="tanks-area">
+      <div class="section-head">
+        <h2>Your Tanks</h2>
+        <span id="placing-hint" class="placing-hint hidden">Click a tank to place your fish — Esc to cancel</span>
+      </div>
+      <div id="tanks-grid" class="tanks-grid"></div>
+    </section>
+
+    <aside class="shop-panel">
+      <h2>Wholesale Market</h2>
+      <div id="shop-list" class="shop-list"></div>
+      <h2>Store Upgrades</h2>
+      <div id="store-upgrades" class="store-upgrades"></div>
+    </aside>
+  </main>
+
+  <div id="toast-container" class="toast-container"></div>
+
+  <div id="help-modal" class="modal-backdrop hidden">
+    <div class="modal">
+      <h2>🐠 How to Play</h2>
+      <ul>
+        <li><strong>Buy fish</strong> from the Wholesale Market, then click a tank to place them.</li>
+        <li><strong>Keep tanks healthy:</strong> feed your fish and clean the water. Hungry fish in dirty tanks get sick and can die.</li>
+        <li><strong>Serve customers:</strong> shoppers appear at the top wanting a specific fish. Click them to make the sale before their patience runs out.</li>
+        <li><strong>Reputation</strong> (⭐) grows with every sale and unlocks rarer, more valuable species. Missed customers and dead fish hurt it.</li>
+        <li><strong>Upgrades:</strong> filters slow grime, auto-feeders keep bellies full, and decorations let you charge 20% more. Buy extra tanks to stock more species.</li>
+        <li><strong>Rent is due daily</strong> — the more tanks you own, the higher it gets. Keep selling!</li>
+      </ul>
+      <p class="modal-note">Your game saves automatically in this browser.</p>
+      <button id="btn-close-help" class="btn btn-primary">Let's go!</button>
+    </div>
+  </div>
+
+  <script src="game.js"></script>
+</body>
+</html>
