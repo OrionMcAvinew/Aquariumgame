@@ -1,31 +1,48 @@
-# Fin & Fortune 🐠
+# Fin & Fortune 3D 🐠
 
-A browser-based aquarium store simulator. Run your own fish shop: stock your tanks, keep your fish happy and healthy, and serve customers before their patience runs out.
+A first-person 3D aquarium store simulator for the browser — think Supermarket Simulator, but you're running a fish shop. Built with Three.js and vanilla JavaScript, playable on desktop **and** mobile (touch controls).
 
 ## How to run
 
-No build step or dependencies — just open `index.html` in a browser, or serve the folder:
+No build step. Serve the folder and open it in a browser:
 
 ```bash
 python3 -m http.server 8000
 # then visit http://localhost:8000
 ```
 
+(Opening `index.html` directly won't work because the game uses ES modules — any static server is fine.)
+
 ## How to play
 
-- **Buy fish** from the Wholesale Market, then click a glowing tank to place them.
-- **Keep tanks healthy** — feed your fish ($2 per tank) and clean the water (free). Hungry fish in dirty tanks get sick and can die.
-- **Serve customers** — shoppers appear at the top wanting a specific species. Click them to make the sale before they walk out.
-- **Build reputation (⭐)** — every sale earns rep, which unlocks rarer and more valuable species (all the way up to the Baby Shark 🦈). Missed customers and dead fish cost you rep.
-- **Upgrade your store:**
-  - 🌀 **Filter** — tank gets dirty half as fast
-  - ⏲️ **Auto-feeder** — feeds the tank automatically
-  - 🪸 **Decoration** — fish from that tank sell for 20% more
-  - 🛁 **Extra tanks** — up to 8, each pricier than the last
-- **Watch your cash** — rent is due every in-game day, and it grows with each tank you own.
+You walk the shop floor in first person and do everything yourself:
 
-Progress saves automatically in your browser (localStorage). Use the **Reset** button to start fresh.
+1. **📱 Order stock** — open the Tablet and buy boxes of fish and supplies wholesale. Deliveries land on the pallet by the front door.
+2. **📦 Stock the store** — pick up a box, carry it to a fish tank (live fish) or a shelf (supplies), and stock it.
+3. **🧽 Keep tanks healthy** — water gets murkier over time, and customers won't buy fish from a dirty tank. Look at a tank with empty hands to feed & clean it.
+4. **💳 Work the register** — customers walk in, browse, grab what they want, and queue at the counter. Stand behind it, scan every item, and take payment before their patience runs out.
+5. **🏷️ Set your prices** — every product has a market price. Mark up too greedily and customers walk straight back out.
+6. **📈 Level up** — every $1 of revenue is 1 XP. Levels unlock rarer fish (up to clownfish and beyond), new products, and bring in more customers. Expand with extra tanks and shelves from the Tablet.
+7. **🌙 Survive the rent** — each day ends with a profit/loss summary, and rent scales with how much store you own.
+
+Progress autosaves to your browser (localStorage).
+
+## Controls
+
+| | Desktop | Touch |
+|---|---|---|
+| Move | WASD / arrows (Shift = run) | left-thumb joystick |
+| Look | mouse (click canvas to capture) | drag right side of screen |
+| Interact | E | USE button |
+| Tablet | Tab | 📱 button |
+| Scan / charge at register | Space / Enter | on-screen buttons |
 
 ## Tech
 
-Vanilla HTML, CSS, and JavaScript — no frameworks. Game state ticks once per second; fish swim on `requestAnimationFrame`.
+- [Three.js](https://threejs.org) (vendored in `lib/`, MIT licensed) for rendering — low-poly store built from primitives, no model files or textures to download.
+- Vanilla JS ES modules, no framework, no build step.
+- DOM-based UI layer (HUD, tablet, checkout) over the WebGL canvas.
+
+## Classic version
+
+The original 2D management version of the game lives in [`classic/`](classic/) — open `classic/index.html` to play it.
