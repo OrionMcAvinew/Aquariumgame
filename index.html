@@ -2,72 +2,83 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Fin &amp; Fortune — Aquarium Store Sim</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="mobile-web-app-capable" content="yes">
+  <title>Fin &amp; Fortune 3D — Aquarium Store Simulator</title>
   <link rel="stylesheet" href="styles.css">
+  <script type="importmap">
+    { "imports": { "three": "./lib/three.module.min.js" } }
+  </script>
 </head>
 <body>
-  <header class="topbar">
-    <div class="brand">
-      <span class="brand-icon">🐠</span>
-      <h1>Fin &amp; Fortune</h1>
+  <canvas id="game"></canvas>
+  <div id="touch-area"></div>
+
+  <!-- HUD -->
+  <div id="hud-top">
+    <div class="hud-pill" id="hud-cash">$0</div>
+    <div class="hud-pill">📅 Day <span id="hud-day">1</span> · <span id="hud-clock">9:00</span></div>
+    <div class="hud-pill level-pill">
+      Lv <span id="hud-level">1</span>
+      <div class="xp-track"><div id="xp-fill"></div></div>
     </div>
-    <div class="hud">
-      <div class="hud-item" title="Cash">💰 <span id="hud-cash">$0</span></div>
-      <div class="hud-item" title="Reputation">⭐ <span id="hud-rep">0</span></div>
-      <div class="hud-item" title="Day">
-        📅 Day <span id="hud-day">1</span>
-        <div class="day-progress"><div id="day-progress-fill"></div></div>
+    <button id="btn-tablet" class="hud-pill hud-btn">📱 Tablet</button>
+  </div>
+
+  <div id="crosshair"></div>
+  <div id="prompt" class="hidden"></div>
+  <div id="toasts"></div>
+
+  <!-- Touch controls -->
+  <div id="joystick"><div id="joystick-knob"></div></div>
+  <button id="btn-interact" class="hidden">USE</button>
+
+  <!-- Checkout panel -->
+  <div id="checkout" class="hidden">
+    <h3>🧾 Checkout</h3>
+    <div id="checkout-body"></div>
+  </div>
+
+  <!-- Tablet -->
+  <div id="tablet" class="modal hidden">
+    <div class="modal-card tablet-card">
+      <div class="tablet-tabs">
+        <button class="tab-btn active" data-tab="order">📦 Order</button>
+        <button class="tab-btn" data-tab="prices">🏷️ Prices</button>
+        <button class="tab-btn" data-tab="store">🏗️ Store</button>
+        <button class="tab-btn" data-tab="help">❓ Help</button>
+        <button id="btn-close-tablet" class="tab-close">✕</button>
       </div>
-    </div>
-    <div class="topbar-actions">
-      <button id="btn-help" class="btn btn-ghost">How to play</button>
-      <button id="btn-reset" class="btn btn-ghost btn-danger">Reset</button>
-    </div>
-  </header>
-
-  <section class="customers-bar">
-    <div class="customers-label">Customers</div>
-    <div id="customer-queue" class="customer-queue">
-      <div class="customer-empty" id="customer-empty">The shop is quiet… for now.</div>
-    </div>
-  </section>
-
-  <main class="layout">
-    <section class="tanks-area">
-      <div class="section-head">
-        <h2>Your Tanks</h2>
-        <span id="placing-hint" class="placing-hint hidden">Click a tank to place your fish — Esc to cancel</span>
-      </div>
-      <div id="tanks-grid" class="tanks-grid"></div>
-    </section>
-
-    <aside class="shop-panel">
-      <h2>Wholesale Market</h2>
-      <div id="shop-list" class="shop-list"></div>
-      <h2>Store Upgrades</h2>
-      <div id="store-upgrades" class="store-upgrades"></div>
-    </aside>
-  </main>
-
-  <div id="toast-container" class="toast-container"></div>
-
-  <div id="help-modal" class="modal-backdrop hidden">
-    <div class="modal">
-      <h2>🐠 How to Play</h2>
-      <ul>
-        <li><strong>Buy fish</strong> from the Wholesale Market, then click a tank to place them.</li>
-        <li><strong>Keep tanks healthy:</strong> feed your fish and clean the water. Hungry fish in dirty tanks get sick and can die.</li>
-        <li><strong>Serve customers:</strong> shoppers appear at the top wanting a specific fish. Click them to make the sale before their patience runs out.</li>
-        <li><strong>Reputation</strong> (⭐) grows with every sale and unlocks rarer, more valuable species. Missed customers and dead fish hurt it.</li>
-        <li><strong>Upgrades:</strong> filters slow grime, auto-feeders keep bellies full, and decorations let you charge 20% more. Buy extra tanks to stock more species.</li>
-        <li><strong>Rent is due daily</strong> — the more tanks you own, the higher it gets. Keep selling!</li>
-      </ul>
-      <p class="modal-note">Your game saves automatically in this browser.</p>
-      <button id="btn-close-help" class="btn btn-primary">Let's go!</button>
+      <div id="tablet-body"></div>
     </div>
   </div>
 
-  <script src="game.js"></script>
+  <!-- Day summary -->
+  <div id="summary-modal" class="modal hidden">
+    <div class="modal-card">
+      <h2 id="summary-title">Day complete!</h2>
+      <div id="summary-body"></div>
+      <button id="btn-start-day" class="ui-btn primary big">Open up the next day →</button>
+    </div>
+  </div>
+
+  <!-- Intro -->
+  <div id="intro-modal" class="modal hidden">
+    <div class="modal-card">
+      <h2>🐠 Welcome to Fin &amp; Fortune!</h2>
+      <p>You just got the keys to your very own aquarium shop. Time to make it swim.</p>
+      <ul class="intro-list">
+        <li>📱 Open the <b>Tablet</b> to order fish &amp; supplies — boxes arrive at the pallet by the door.</li>
+        <li>📦 <b>Carry boxes</b> to tanks and shelves to stock them.</li>
+        <li>🧽 <b>Feed &amp; clean tanks</b> or customers won't buy from them.</li>
+        <li>💳 Stand <b>behind the counter</b> to scan items and take payment.</li>
+      </ul>
+      <p class="controls-note"><b>Desktop:</b> click to look around · WASD move · E interact · TAB tablet<br>
+      <b>Touch:</b> left thumb moves · right thumb looks · tap USE</p>
+      <button id="btn-close-intro" class="ui-btn primary big">Open the shop!</button>
+    </div>
+  </div>
+
+  <script type="module" src="src/main.js"></script>
 </body>
 </html>

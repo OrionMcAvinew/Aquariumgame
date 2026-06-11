@@ -1,0 +1,346 @@
+// DOM UI: HUD, interaction prompt, toasts, tablet (orders/prices/store),
+// checkout panel, day summary, intro.
+import {
+  CATALOG, item, xpForLevel, MAX_LEVEL, DAY_LEN, QUEUE_PATIENCE,
+  tankPrice, shelfPrice, MAX_TANK_SLOTS, MAX_SHELF_SLOTS, DELIVERY_TIME,
+} from "./data.js";
+
+const $ = (id) => document.getElementById(id);
+
+export class UI {
+  constructor(game) {
+    this.game = game;
+    this.orderCart = {}; // itemId -> box qty
+    this.checkoutCustomerId = null;
+
+    $("btn-tablet").addEventListener("click", () => this.toggleTablet());
+    $("btn-close-tablet").addEventListener("click", () => this.toggleTablet(false));
+    $("btn-start-day").addEventListener("click", () => {
+      $("summary-modal").classList.add("hidden");
+      this.game.paused = false;
+      this.game.save();
+    });
+    $("btn-close-intro").addEventListener("click", () => {
+      $("intro-modal").classList.add("hidden");
+    });
+    for (const tab of document.querySelectorAll(".tab-btn")) {
+      tab.addEventListener("click", () => this.showTab(tab.dataset.tab));
+    }
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") this.toggleTablet(false);
+      const c = this.activeCheckoutCustomer();
+      if (c) {
+        if (e.code === "Space") { e.preventDefault(); this.game.customers.scanNext(c); this.renderCheckout(); }
+        if (e.key === "Enter") { this.game.customers.takePayment(c); }
+      }
+    });
+  }
+
+  /* ---------------- HUD ---------------- */
+
+  updateHUD() {
+    const s = this.game.state;
+    $("hud-cash").textContent = `$${Math.round(s.cash)}`;
+    $("hud-cash").classList.toggle("debt", s.cash < 0);
+    $("hud-day").textContent = s.day;
+
+    const hour = 9 + (s.time / DAY_LEN) * 12;
+    const h = Math.floor(hour), m = Math.floor((hour - h) * 60);
+    $("hud-clock").textContent = `${h}:${String(m).padStart(2, "0")}`;
+
+    $("hud-level").textContent = s.level;
+    const cur = xpForLevel(s.level), next = xpForLevel(s.level + 1);
+    const pct = s.level >= MAX_LEVEL ? 100 : ((s.xp - cur) / (next - cur)) * 100;
+    $("xp-fill").style.width = `${Math.min(100, pct)}%`;
+  }
+
+  setPrompt(target) {
+    const el = $("prompt");
+    const btn = $("btn-interact");
+    if (target && target.label) {
+      const actionable = target.type !== "none";
+      el.textContent = actionable && !this.game.player.isTouch
+        ? `[E] ${target.label}` : target.label;
+      el.classList.remove("hidden");
+      btn.classList.toggle("hidden", !actionable);
+    } else {
+      el.classList.add("hidden");
+      btn.classList.add("hidden");
+    }
+  }
+
+  toast(msg, kind = "") {
+    const box = $("toasts");
+    const t = document.createElement("div");
+    t.className = `toast ${kind}`;
+    t.textContent = msg;
+    box.appendChild(t);
+    while (box.children.length > 4) box.firstChild.remove();
+    setTimeout(() => t.remove(), 3800);
+  }
+
+  anyModalOpen() {
+    return ["tablet", "summary-modal", "intro-modal"].some(
+      (id) => !$(id).classList.contains("hidden")
+    );
+  }
+
+  /* ---------------- Tablet ---------------- */
+
+  toggleTablet(force) {
+    const t = $("tablet");
+    const open = force !== undefined ? force : t.classList.contains("hidden");
+    t.classList.toggle("hidden", !open);
+    if (open) {
+      document.exitPointerLock?.();
+      this.showTab("order");
+    }
+  }
+
+  showTab(name) {
+    for (const b of document.querySelectorAll(".tab-btn"))
+      b.classList.toggle("active", b.dataset.tab === name);
+    const body = $("tablet-body");
+    body.innerHTML = "";
+    if (name === "order") this.renderOrderTab(body);
+    else if (name === "prices") this.renderPricesTab(body);
+    else if (name === "store") this.renderStoreTab(body);
+    else this.renderHelpTab(body);
+  }
+
+  renderOrderTab(body) {
+    const s = this.game.state;
+    const list = document.createElement("div");
+    list.className = "order-list";
+    for (const it of CATALOG) {
+      const row = document.createElement("div");
+      row.className = "order-row" + (it.level > s.level ? " locked" : "");
+      const qty = this.orderCart[it.id] || 0;
+      row.innerHTML = `
+        <span class="swatch" style="background:#${it.color.toString(16).padStart(6, "0")}"></span>
+        <div class="order-info">
+          <b>${it.name}</b>
+          <small>${it.level > s.level ? `🔒 Level ${it.level}` :
+            `box of ${it.boxSize} · $${it.boxCost} · sells ~$${it.market}/ea`}</small>
+        </div>
+        ${it.level <= s.level ? `
+          <div class="qty-ctl">
+            <button class="qbtn" data-d="-1">−</button>
+            <span class="qty">${qty}</span>
+            <button class="qbtn" data-d="1">+</button>
+          </div>` : ""}
+      `;
+      for (const b of row.querySelectorAll(".qbtn")) {
+        b.addEventListener("click", () => {
+          this.orderCart[it.id] = Math.max(0, (this.orderCart[it.id] || 0) + +b.dataset.d);
+          this.showTab("order");
+        });
+      }
+      list.appendChild(row);
+    }
+    body.appendChild(list);
+
+    const total = Object.entries(this.orderCart)
+      .reduce((sum, [id, q]) => sum + item(id).boxCost * q, 0);
+    const foot = document.createElement("div");
+    foot.className = "order-foot";
+    foot.innerHTML = `<span>Total: <b>$${total}</b></span>`;
+    const btn = document.createElement("button");
+    btn.className = "ui-btn primary";
+    btn.textContent = total > 0 ? `Place order ($${total})` : "Cart is empty";
+    btn.disabled = total === 0 || total > s.cash;
+    if (total > s.cash && total > 0) btn.textContent = `Not enough cash ($${total})`;
+    btn.addEventListener("click", () => {
+      s.cash -= total;
+      s.stats.spent += total;
+      for (const [id, q] of Object.entries(this.orderCart)) {
+        for (let i = 0; i < q; i++) {
+          s.orders.push({ itemId: id, count: item(id).boxSize, eta: DELIVERY_TIME + i * 1.5 });
+        }
+      }
+      this.orderCart = {};
+      this.toast(`🚚 Order placed — arriving in ~${DELIVERY_TIME}s`);
+      this.toggleTablet(false);
+      this.game.save();
+    });
+    foot.appendChild(btn);
+    body.appendChild(foot);
+  }
+
+  renderPricesTab(body) {
+    const s = this.game.state;
+    const note = document.createElement("p");
+    note.className = "tab-note";
+    note.textContent = "Set your retail prices. Push too far above market and customers walk away.";
+    body.appendChild(note);
+    for (const it of CATALOG) {
+      if (it.level > s.level) continue;
+      const row = document.createElement("div");
+      row.className = "order-row";
+      const price = s.prices[it.id];
+      const ratio = price / it.market;
+      const mood = ratio > 2.2 ? "🚫" : ratio > 1.6 ? "😒" : ratio < 0.9 ? "🤑" : "🙂";
+      row.innerHTML = `
+        <span class="swatch" style="background:#${it.color.toString(16).padStart(6, "0")}"></span>
+        <div class="order-info"><b>${it.name}</b><small>market $${it.market} ${mood}</small></div>
+        <div class="qty-ctl">
+          <button class="qbtn" data-d="-1">−</button>
+          <span class="qty">$${price}</span>
+          <button class="qbtn" data-d="1">+</button>
+        </div>
+      `;
+      for (const b of row.querySelectorAll(".qbtn")) {
+        b.addEventListener("click", () => {
+          s.prices[it.id] = Math.max(1, s.prices[it.id] + +b.dataset.d);
+          this.showTab("prices");
+          this.game.save();
+        });
+      }
+      body.appendChild(row);
+    }
+  }
+
+  renderStoreTab(body) {
+    const g = this.game, s = g.state;
+    const make = (label, desc, cost, can, fn) => {
+      const row = document.createElement("div");
+      row.className = "order-row";
+      row.innerHTML = `<div class="order-info"><b>${label}</b><small>${desc}</small></div>`;
+      const btn = document.createElement("button");
+      btn.className = "ui-btn primary";
+      btn.textContent = cost === null ? "Maxed out" : `Buy $${cost}`;
+      btn.disabled = cost === null || !can;
+      btn.addEventListener("click", fn);
+      row.appendChild(btn);
+      body.appendChild(row);
+    };
+    const tCost = s.tanksOwned < MAX_TANK_SLOTS ? tankPrice(s.tanksOwned) : null;
+    make(`🐟 Fish tank (${s.tanksOwned}/${MAX_TANK_SLOTS})`, "Holds up to 8 fish",
+      tCost, tCost !== null && s.cash >= tCost, () => {
+        s.cash -= tCost; s.stats.spent += tCost;
+        g.addTankUnit();
+        this.toast("🛁 New tank installed!", "good");
+        this.showTab("store");
+        g.save();
+      });
+    const shCost = s.shelvesOwned < MAX_SHELF_SLOTS ? shelfPrice(s.shelvesOwned) : null;
+    make(`🗄️ Shelf unit (${s.shelvesOwned}/${MAX_SHELF_SLOTS})`, "3 rows × 8 products",
+      shCost, shCost !== null && s.cash >= shCost, () => {
+        s.cash -= shCost; s.stats.spent += shCost;
+        g.addShelfUnit();
+        this.toast("🗄️ New shelf installed!", "good");
+        this.showTab("store");
+        g.save();
+      });
+
+    const danger = document.createElement("button");
+    danger.className = "ui-btn danger";
+    danger.textContent = "Reset save & start over";
+    danger.addEventListener("click", () => {
+      if (confirm("Wipe your store and start from day 1?")) g.resetGame();
+    });
+    body.appendChild(danger);
+  }
+
+  renderHelpTab(body) {
+    body.innerHTML = `
+      <div class="help-text">
+        <p><b>Goal:</b> grow your aquarium shop. Order stock, fill your tanks and shelves, and ring up customers at the register.</p>
+        <p><b>📦 Stock:</b> order boxes here in the tablet. They arrive on the pallet by the door. Carry a box to a tank (fish) or shelf (supplies) and stock it.</p>
+        <p><b>🧽 Care:</b> tanks get dirty over time — customers won't buy fish from murky water. Look at a tank with empty hands to feed &amp; clean it.</p>
+        <p><b>💳 Checkout:</b> stand behind the counter when someone's waiting, scan every item, then take payment. Don't make the line wait too long!</p>
+        <p><b>📈 Levels:</b> every $1 of sales is 1 XP. Leveling up unlocks new species, products, and more customers.</p>
+        <p class="controls-note"><b>Controls:</b> WASD move · mouse look (click to capture) · E interact · TAB tablet · SHIFT run.<br>
+        On touch: left side = move stick, right side = look, buttons for the rest.</p>
+      </div>
+    `;
+  }
+
+  /* ---------------- Checkout panel ---------------- */
+
+  activeCheckoutCustomer() {
+    if ($("checkout").classList.contains("hidden")) return null;
+    return this.game.customers.atCounter();
+  }
+
+  updateCheckout() {
+    const g = this.game;
+    const customer = g.customers.atCounter();
+    const show = customer && g.player.inRegisterZone();
+    const panel = $("checkout");
+    const wasHidden = panel.classList.contains("hidden");
+    panel.classList.toggle("hidden", !show);
+    if (show && (wasHidden || customer.id !== this.checkoutCustomerId)) {
+      this.checkoutCustomerId = customer.id;
+      this.renderCheckout();
+    } else if (show) {
+      // keep the patience bar fresh
+      const fill = panel.querySelector(".patience-fill");
+      if (fill) fill.style.width = `${(customer.patience / QUEUE_PATIENCE) * 100}%`;
+    }
+  }
+
+  renderCheckout() {
+    const g = this.game;
+    const c = g.customers.atCounter();
+    if (!c) return;
+    const body = $("checkout-body");
+    body.innerHTML = "";
+    let total = 0, allScanned = true;
+    for (const it of c.cart) {
+      total += it.price;
+      if (!it.scanned) allScanned = false;
+      const row = document.createElement("div");
+      row.className = "scan-row" + (it.scanned ? " scanned" : "");
+      row.innerHTML = `<span>${it.label}</span><span>$${it.price}</span>`;
+      body.appendChild(row);
+    }
+    const bar = document.createElement("div");
+    bar.className = "patience-track";
+    bar.innerHTML = `<div class="patience-fill" style="width:${(c.patience / QUEUE_PATIENCE) * 100}%"></div>`;
+    body.appendChild(bar);
+
+    const actions = document.createElement("div");
+    actions.className = "checkout-actions";
+    if (!allScanned) {
+      const scan = document.createElement("button");
+      scan.className = "ui-btn primary";
+      scan.textContent = g.player.isTouch ? "SCAN ITEM" : "SCAN ITEM (Space)";
+      scan.addEventListener("click", () => { g.customers.scanNext(c); this.renderCheckout(); });
+      actions.appendChild(scan);
+    } else {
+      const pay = document.createElement("button");
+      pay.className = "ui-btn pay";
+      pay.textContent = (g.player.isTouch ? `TAKE $${total}` : `TAKE $${total} (Enter)`);
+      pay.addEventListener("click", () => g.customers.takePayment(c));
+      actions.appendChild(pay);
+    }
+    body.appendChild(actions);
+  }
+
+  /* ---------------- Day summary ---------------- */
+
+  showSummary(day, stats, rent) {
+    this.game.paused = true;
+    document.exitPointerLock?.();
+    const net = stats.revenue - stats.spent - rent;
+    $("summary-title").textContent = `Day ${day} complete!`;
+    $("summary-body").innerHTML = `
+      <div class="sum-row"><span>Revenue</span><b class="pos">+$${stats.revenue}</b></div>
+      <div class="sum-row"><span>Stock & upgrades</span><b class="neg">−$${stats.spent}</b></div>
+      <div class="sum-row"><span>Rent</span><b class="neg">−$${rent}</b></div>
+      <div class="sum-row total"><span>Net</span><b class="${net >= 0 ? "pos" : "neg"}">${net >= 0 ? "+" : "−"}$${Math.abs(net)}</b></div>
+      <hr>
+      <div class="sum-row"><span>Customers served</span><b>${stats.served}</b></div>
+      <div class="sum-row"><span>Items sold</span><b>${stats.sold}</b></div>
+      <div class="sum-row"><span>Walked out of line</span><b>${stats.lost}</b></div>
+      <div class="sum-row"><span>Wanted items you didn't stock</span><b>${stats.missed}</b></div>
+      <div class="sum-row"><span>Scared off by prices</span><b>${stats.priceSkips}</b></div>
+    `;
+    $("summary-modal").classList.remove("hidden");
+  }
+
+  showIntro() {
+    $("intro-modal").classList.remove("hidden");
+  }
+}
