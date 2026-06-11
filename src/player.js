@@ -109,15 +109,23 @@ export class Player {
       if (this.keys.has("s") || this.keys.has("arrowdown")) mz += 1;
       if (this.keys.has("a") || this.keys.has("arrowleft")) mx -= 1;
       if (this.keys.has("d") || this.keys.has("arrowright")) mx += 1;
-      mx += this.touch.mx; mz += this.touch.mz;
-      const len = Math.hypot(mx, mz);
-      if (len > 0.01) {
-        mx /= Math.max(1, len); mz /= Math.max(1, len);
-        const speed = this.keys.has("shift") ? SPRINT : WALK;
+      let speed = 0;
+      if (mx || mz) {
+        const len = Math.hypot(mx, mz);
+        mx /= len; mz /= len;
+        speed = this.keys.has("shift") ? SPRINT : WALK;
+      } else if (Math.hypot(this.touch.mx, this.touch.mz) > 0.12) {
+        // analog stick: speed scales with deflection, full push runs
+        const len = Math.hypot(this.touch.mx, this.touch.mz);
+        const mag = Math.min(1, len);
+        mx = this.touch.mx / len; mz = this.touch.mz / len;
+        speed = (WALK + (SPRINT - WALK) * Math.max(0, mag - 0.8) * 5) * mag;
+      }
+      if (speed > 0) {
         const sin = Math.sin(this.yaw), cos = Math.cos(this.yaw);
-        // camera-relative: forward is -Z in view space
-        this.pos.x += (mx * cos - mz * sin) * speed * dt;
-        this.pos.z += (mz * cos + mx * sin) * speed * dt;
+        // rotate input from view space into world space (view dir is (-sin, -cos))
+        this.pos.x += (mx * cos + mz * sin) * speed * dt;
+        this.pos.z += (mz * cos - mx * sin) * speed * dt;
         this.resolveCollisions();
       }
     }

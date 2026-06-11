@@ -59,7 +59,10 @@ function loadState() {
     if (!raw) return null;
     const d = JSON.parse(raw);
     const s = defaultState();
+    const defaultPrices = s.prices;
     Object.assign(s, d);
+    // saves from older catalogs may be missing prices for new items
+    s.prices = { ...defaultPrices, ...d.prices };
     s.stats = { ...freshStats(), ...d.stats };
     s.boxes = (d.boxes || []).map((b) => ({ itemId: b.itemId, count: b.count, x: b.x, z: b.z }));
     return s;
@@ -160,6 +163,9 @@ function init() {
   game.renderer = new THREE.WebGLRenderer({ antialias: true, canvas: document.getElementById("game") });
   game.renderer.setSize(innerWidth, innerHeight);
   game.renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+  game.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  game.renderer.toneMappingExposure = 1.15;
+  game.scene.fog = new THREE.Fog(0x9ed4e8, 28, 60);
   const isTouch = matchMedia("(pointer: coarse)").matches;
   game.renderer.shadowMap.enabled = !isTouch;
 

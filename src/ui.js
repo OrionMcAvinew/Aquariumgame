@@ -112,7 +112,15 @@ export class UI {
     const s = this.game.state;
     const list = document.createElement("div");
     list.className = "order-list";
+    let lastKind = null;
     for (const it of CATALOG) {
+      if (it.kind !== lastKind) {
+        lastKind = it.kind;
+        const head = document.createElement("div");
+        head.className = "order-section";
+        head.textContent = it.kind === "fish" ? "🐟 Live Fish" : "🧰 Supplies";
+        list.appendChild(head);
+      }
       const row = document.createElement("div");
       row.className = "order-row" + (it.level > s.level ? " locked" : "");
       const qty = this.orderCart[it.id] || 0;
