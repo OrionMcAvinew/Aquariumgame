@@ -2,10 +2,13 @@
 import * as THREE from "three";
 import {
   STORE, TANK_SLOTS, SHELF_SLOTS, COUNTER, PALLET,
-  SHELF_ROWS, ROW_CAP, item,
+  SHELF_ROWS, ROW_CAP, item, FISH,
 } from "./data.js";
 
 const mat = (color, opts = {}) => new THREE.MeshLambertMaterial({ color, ...opts });
+
+const NAVY = 0x1d3557;
+const TRIM = 0xf4f1ea;
 
 // deterministic per-slot randomness so decorations don't reshuffle on reload
 function seededRand(seed) {
@@ -42,22 +45,42 @@ function makePoster(title, sub, bg, fg) {
   }, 256, 320);
 }
 
+function makeAisleSign(text, bg) {
+  return canvasTexture((ctx) => {
+    ctx.fillStyle = bg; ctx.fillRect(0, 0, 512, 128);
+    ctx.fillStyle = "#ffffff";
+    ctx.strokeStyle = "rgba(255,255,255,0.6)"; ctx.lineWidth = 6;
+    ctx.strokeRect(8, 8, 496, 112);
+    ctx.font = "bold 64px sans-serif";
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillText(text, 256, 68);
+  }, 512, 128);
+}
+
 export function buildRoom(scene, colliders) {
   const { halfW, halfD, wallH, doorHalf } = STORE;
 
-  // Floor: warm tile with subtle variation
+  // Floor: warm orange wood planks
   const floorTex = canvasTexture((ctx) => {
-    ctx.fillStyle = "#ddd6c8"; ctx.fillRect(0, 0, 128, 128);
-    ctx.fillStyle = "#d2cabb"; ctx.fillRect(0, 0, 64, 64); ctx.fillRect(64, 64, 64, 64);
-    for (let i = 0; i < 50; i++) {
-      ctx.fillStyle = `rgba(120,110,90,${Math.random() * 0.08})`;
-      ctx.fillRect(Math.random() * 128, Math.random() * 128, 3, 3);
+    const tones = ["#b9742f", "#a96527", "#c07f3a", "#b06c2a", "#c8893f"];
+    for (let p = 0; p < 4; p++) {
+      ctx.fillStyle = tones[p % tones.length];
+      ctx.fillRect(0, p * 32, 128, 32);
+      // plank seams + grain
+      ctx.fillStyle = "rgba(60,30,5,0.45)";
+      ctx.fillRect(0, p * 32, 128, 2);
+      ctx.fillRect(((p * 53) % 128), p * 32, 2, 32);
+      ctx.strokeStyle = "rgba(80,40,10,0.18)";
+      for (let g = 0; g < 3; g++) {
+        ctx.beginPath();
+        ctx.moveTo(0, p * 32 + 8 + g * 8);
+        ctx.lineTo(128, p * 32 + 6 + g * 9);
+        ctx.stroke();
+      }
     }
-    ctx.strokeStyle = "#b9b09c"; ctx.lineWidth = 2;
-    for (const [x, y] of [[0, 0], [64, 0], [0, 64], [64, 64]]) ctx.strokeRect(x, y, 64, 64);
   });
   floorTex.wrapS = floorTex.wrapT = THREE.RepeatWrapping;
-  floorTex.repeat.set(halfW, halfD);
+  floorTex.repeat.set(halfW * 0.8, halfD * 0.8);
   const floor = new THREE.Mesh(
     new THREE.PlaneGeometry(halfW * 2, halfD * 2),
     new THREE.MeshLambertMaterial({ map: floorTex })
@@ -90,9 +113,8 @@ export function buildRoom(scene, colliders) {
   lamp.position.set(6.5, 3.4, halfD + 1.6);
   scene.add(post, lamp);
 
-  // Walls
-  const wallMat = mat(0xf4ecdc);
-  const wainscotMat = mat(0x35698c);
+  // Walls: warm butter-yellow
+  const wallMat = mat(0xf0e0b2);
   const wall = (w, x, z, rotY, material = wallMat, h = wallH, y = wallH / 2, depth = 0.25) => {
     const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, depth), material);
     m.position.set(x, y, z);
@@ -104,10 +126,14 @@ export function buildRoom(scene, colliders) {
   wall(halfW * 2, 0, -halfD, 0);                                 // north
   wall(halfD * 2, -halfW, 0, Math.PI / 2);                       // west
   wall(halfD * 2, halfW, 0, Math.PI / 2);                        // east
-  // wainscot stripe on solid walls
-  wall(halfW * 2, 0, -halfD + 0.14, 0, wainscotMat, 0.85, 0.425, 0.04);
-  wall(halfD * 2, -halfW + 0.14, 0, Math.PI / 2, wainscotMat, 0.85, 0.425, 0.04);
-  wall(halfD * 2, halfW - 0.14, 0, Math.PI / 2, wainscotMat, 0.85, 0.425, 0.04);
+
+  // Navy feature panels behind the aquatics section (west wall + NW segment)
+  const navyMat = mat(NAVY);
+  wall(halfD * 2, -halfW + 0.14, 0, Math.PI / 2, navyMat, 2.75, 1.375, 0.05);
+  wall(5.6, -5.0, -halfD + 0.14, 0, navyMat, 2.75, 1.375, 0.05);
+  // white trim caps on the panels
+  wall(halfD * 2, -halfW + 0.17, 0, Math.PI / 2, mat(TRIM), 0.1, 2.78, 0.06);
+  wall(5.6, -5.0, -halfD + 0.17, 0, mat(TRIM), 0.1, 2.78, 0.06);
 
   // South storefront: knee wall + big glass windows flanking the door
   const glassMat = new THREE.MeshPhongMaterial({
@@ -116,8 +142,8 @@ export function buildRoom(scene, colliders) {
   const segW = halfW - doorHalf;
   for (const side of [-1, 1]) {
     const cx = side * (doorHalf + segW / 2);
-    wall(segW, cx, halfD, 0, wallMat, 0.8, 0.4);                       // knee wall
-    wall(segW, cx, halfD, 0, wallMat, 0.5, wallH - 0.25);              // header band
+    wall(segW, cx, halfD, 0, navyMat, 0.8, 0.4);                       // knee wall
+    wall(segW, cx, halfD, 0, navyMat, 0.5, wallH - 0.25);              // header band
     const win = new THREE.Mesh(new THREE.BoxGeometry(segW - 0.3, wallH - 1.3, 0.06), glassMat);
     win.position.set(cx, 0.8 + (wallH - 1.3) / 2, halfD);
     scene.add(win);
@@ -134,14 +160,14 @@ export function buildRoom(scene, colliders) {
     jamb.position.set(side * doorHalf, 1.225, halfD);
     scene.add(jamb);
   }
-  const header = new THREE.Mesh(new THREE.BoxGeometry(doorHalf * 2 + 0.16, wallH - 2.3, 0.25), wallMat);
+  const header = new THREE.Mesh(new THREE.BoxGeometry(doorHalf * 2 + 0.16, wallH - 2.3, 0.25), navyMat);
   header.position.set(0, 2.3 + (wallH - 2.3) / 2, halfD);
   scene.add(header);
 
-  // Ceiling + light fixtures + trim
+  // Ceiling + light fixtures
   const ceil = new THREE.Mesh(
     new THREE.PlaneGeometry(halfW * 2, halfD * 2),
-    new THREE.MeshBasicMaterial({ color: 0xdce3df })
+    new THREE.MeshBasicMaterial({ color: 0xe7ebe4 })
   );
   ceil.rotation.x = Math.PI / 2;
   ceil.position.y = wallH;
@@ -153,10 +179,28 @@ export function buildRoom(scene, colliders) {
     scene.add(f);
   }
 
+  // Hanging aisle signs
+  const signDefs = [
+    { tex: makeAisleSign("🐠 AQUATICS", "#1d3557"), x: -6.5, rotY: Math.PI / 2 },
+    { tex: makeAisleSign("🧰 SUPPLIES", "#2a9d8f"), x: 6.5, rotY: -Math.PI / 2 },
+  ];
+  for (const s of signDefs) {
+    const board = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 0.65),
+      new THREE.MeshLambertMaterial({ map: s.tex, side: THREE.DoubleSide }));
+    board.position.set(s.x, 2.65, 0);
+    board.rotation.y = s.rotY;
+    scene.add(board);
+    for (const dz of [-1, 1]) {
+      const wire = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, wallH - 2.95, 4), mat(0x495057));
+      wire.position.set(s.x, (wallH + 2.95) / 2 - 0.18, dz);
+      scene.add(wire);
+    }
+  }
+
   // Posters
   const posters = [
-    { tex: makePoster("NEW!", "Exotic species weekly", "#0b3954", "#ffd166"), x: -4, z: -halfD + 0.14, ry: 0 },
-    { tex: makePoster("CARE", "Happy fish sell best", "#87431d", "#ffe8d6"), x: 4.5, z: -halfD + 0.14, ry: 0 },
+    { tex: makePoster("NEW!", "Exotic species weekly", "#0b3954", "#ffd166"), x: 0.8, z: -halfD + 0.14, ry: 0 },
+    { tex: makePoster("CARE", "Happy fish sell best", "#87431d", "#ffe8d6"), x: 2.2, z: -halfD + 0.14, ry: 0 },
     { tex: makePoster("SALE", "Starter kits in stock", "#283618", "#a3b18a"), x: halfW - 0.14, z: 3.4, ry: -Math.PI / 2 },
   ];
   for (const p of posters) {
@@ -202,6 +246,37 @@ export function buildRoom(scene, colliders) {
     colliders.push({ minX: ix - 1.0, maxX: ix + 1.0, minZ: iz - 0.4, maxZ: iz + 0.4 });
   }
 
+  // Big potted palm by the north wall (fills the gap between sections)
+  const pot = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.26, 0.5, 10), mat(0xa44a3f));
+  pot.position.set(0, 0.25, -halfD + 0.55);
+  const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.09, 1.0, 6), mat(0x7f5539));
+  trunk.position.set(0, 1.0, -halfD + 0.55);
+  scene.add(pot, trunk);
+  const palmR = seededRand(404);
+  for (let i = 0; i < 6; i++) {
+    const a = (i / 6) * Math.PI * 2;
+    const leaf = new THREE.Mesh(new THREE.ConeGeometry(0.09, 0.85, 4), mat(0x4f772d));
+    leaf.position.set(Math.cos(a) * 0.32, 1.65 + palmR() * 0.1, -halfD + 0.55 + Math.sin(a) * 0.32);
+    leaf.rotation.z = Math.cos(a) * 1.15;
+    leaf.rotation.x = -Math.sin(a) * 1.15;
+    scene.add(leaf);
+  }
+  colliders.push({ minX: -0.4, maxX: 0.4, minZ: -halfD, maxZ: -halfD + 0.95 });
+
+  // Barrel stack + cardboard pile near the delivery corner
+  const barrelMat = [mat(0xc1121f), mat(0xf9c74f)];
+  const barrelPos = [[-7.2, 0.3, 6.2], [-7.85, 0.3, 6.05], [-7.5, 0.9, 6.15]];
+  barrelPos.forEach(([bx, by, bz], i) => {
+    const b = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 0.6, 10), barrelMat[i % 2]);
+    b.position.set(bx, by, bz);
+    b.castShadow = true;
+    scene.add(b);
+    const band = new THREE.Mesh(new THREE.CylinderGeometry(0.305, 0.305, 0.08, 10), mat(TRIM));
+    band.position.set(bx, by + 0.12, bz);
+    scene.add(band);
+  });
+  colliders.push({ minX: -8.2, maxX: -6.85, minZ: 5.7, maxZ: 6.55 });
+
   // Wall colliders (door stays open but blocked so the player remains inside)
   colliders.push(
     { minX: -halfW - 1, maxX: halfW + 1, minZ: -halfD - 1, maxZ: -halfD + 0.2 },
@@ -214,7 +289,7 @@ export function buildRoom(scene, colliders) {
   const counterGroup = new THREE.Group();
   const top = new THREE.Mesh(new THREE.BoxGeometry(COUNTER.w, 0.08, COUNTER.d), mat(0x8a5a3b));
   top.position.y = COUNTER.h;
-  const body = new THREE.Mesh(new THREE.BoxGeometry(COUNTER.w - 0.1, COUNTER.h, COUNTER.d - 0.15), mat(0x356a8c));
+  const body = new THREE.Mesh(new THREE.BoxGeometry(COUNTER.w - 0.1, COUNTER.h, COUNTER.d - 0.15), mat(NAVY));
   body.position.y = COUNTER.h / 2;
   const register = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.3, 0.36), mat(0x2b2d42));
   register.position.set(-COUNTER.w / 2 + 0.45, COUNTER.h + 0.19, 0);
@@ -244,9 +319,9 @@ export function buildRoom(scene, colliders) {
 
 /* ---------------- Fish model ---------------- */
 
-function buildFishMesh(species) {
+function buildFishMesh(species, scale = 1) {
   const g = new THREE.Group();
-  const s = species.size;
+  const s = species.size * scale;
   const bodyMat = mat(species.color);
   const finMat = mat(species.fin);
 
@@ -271,9 +346,12 @@ function buildFishMesh(species) {
   return { group: g, tail };
 }
 
-/* ---------------- Fish tank unit ---------------- */
+/* ---------------- Fish tank unit (two-tier glowing rack) ---------------- */
 
 const CORAL_COLORS = [0xff6b6b, 0xf3722c, 0xf9c74f, 0xc77dff, 0x4ecdc4];
+const MAIN_Y = 0.8;           // main tank base height
+const MAIN_H = 0.95;          // main tank height
+const DECO_Y = MAIN_Y + MAIN_H + 0.09; // upper display tank base
 
 export class TankUnit {
   constructor(scene, colliders, slotIndex) {
@@ -283,39 +361,69 @@ export class TankUnit {
     this.group.position.set(slot.x, 0, slot.z);
     this.group.rotation.y = slot.rotY;
 
-    const stand = new THREE.Mesh(new THREE.BoxGeometry(1.9, 0.85, 0.75), mat(0x3d405b));
-    stand.position.y = 0.425;
-    stand.castShadow = true;
-    const kick = new THREE.Mesh(new THREE.BoxGeometry(1.9, 0.1, 0.77), mat(0x2b2d42));
-    kick.position.y = 0.05;
+    const navyMat = mat(NAVY);
+    const trimMat = mat(TRIM);
 
-    this.waterMat = new THREE.MeshLambertMaterial({ color: 0x3aa6dd, transparent: true, opacity: 0.5 });
-    this.water = new THREE.Mesh(new THREE.BoxGeometry(1.74, 0.72, 0.6), this.waterMat);
-    this.water.position.y = 0.85 + 0.04 + 0.36;
+    // cabinet base
+    const cabinet = new THREE.Mesh(new THREE.BoxGeometry(2.0, MAIN_Y, 0.78), navyMat);
+    cabinet.position.y = MAIN_Y / 2;
+    cabinet.castShadow = true;
+    const kick = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.08, 0.8), mat(0x14253c));
+    kick.position.y = 0.04;
+    const cabTrim = new THREE.Mesh(new THREE.BoxGeometry(2.02, 0.06, 0.8), trimMat);
+    cabTrim.position.y = MAIN_Y - 0.03;
+
+    // main tank: glowing back panel, water, glass
+    this.glowMat = new THREE.MeshBasicMaterial({ color: 0x3ec3f7 });
+    const glow = new THREE.Mesh(new THREE.PlaneGeometry(1.86, MAIN_H - 0.12), this.glowMat);
+    glow.position.set(0, MAIN_Y + MAIN_H / 2, -0.3);
+
+    this.waterMat = new THREE.MeshLambertMaterial({ color: 0x3aa6dd, transparent: true, opacity: 0.42 });
+    this.water = new THREE.Mesh(new THREE.BoxGeometry(1.86, MAIN_H - 0.18, 0.58), this.waterMat);
+    this.water.position.y = MAIN_Y + (MAIN_H - 0.18) / 2 + 0.1;
 
     const glassMat = new THREE.MeshPhongMaterial({
-      color: 0xd6f3ff, transparent: true, opacity: 0.15, shininess: 120,
+      color: 0xd6f3ff, transparent: true, opacity: 0.13, shininess: 120,
     });
-    this.glass = new THREE.Mesh(new THREE.BoxGeometry(1.84, 0.86, 0.68), glassMat);
-    this.glass.position.y = 0.85 + 0.43;
+    this.glass = new THREE.Mesh(new THREE.BoxGeometry(1.94, MAIN_H, 0.7), glassMat);
+    this.glass.position.y = MAIN_Y + MAIN_H / 2;
     this.glass.userData.interact = { type: "tank", unit: this };
 
-    const rim = new THREE.Mesh(new THREE.BoxGeometry(1.88, 0.06, 0.72), mat(0x2b2d42));
-    rim.position.y = 0.85 + 0.86;
-    // light strip glowing under the rim
-    const strip = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.03, 0.5),
-      new THREE.MeshBasicMaterial({ color: 0xf4fcff }));
-    strip.position.y = 0.85 + 0.825;
-    const gravel = new THREE.Mesh(new THREE.BoxGeometry(1.74, 0.07, 0.6), mat(0xc9a86b));
-    gravel.position.y = 0.85 + 0.075;
+    const gravel = new THREE.Mesh(new THREE.BoxGeometry(1.86, 0.08, 0.58), mat(0xc9a86b));
+    gravel.position.y = MAIN_Y + 0.06;
 
-    this.group.add(stand, kick, this.water, this.glass, rim, strip, gravel);
+    // hood between tiers with a light strip
+    const hood = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.1, 0.76), navyMat);
+    hood.position.y = MAIN_Y + MAIN_H + 0.04;
+    const strip = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.025, 0.5),
+      new THREE.MeshBasicMaterial({ color: 0xf4fcff }));
+    strip.position.y = MAIN_Y + MAIN_H - 0.02;
+
+    this.group.add(cabinet, kick, cabTrim, glow, this.water, this.glass, gravel, hood, strip);
+
+    // upper decorative display tank (ambient fish, pure vibes)
+    const decoH = 0.5;
+    const decoGlow = new THREE.Mesh(new THREE.PlaneGeometry(1.86, decoH - 0.08),
+      new THREE.MeshBasicMaterial({ color: 0x59d1f9 }));
+    decoGlow.position.set(0, DECO_Y + decoH / 2, -0.28);
+    const decoWater = new THREE.Mesh(new THREE.BoxGeometry(1.86, decoH - 0.1, 0.52),
+      new THREE.MeshLambertMaterial({ color: 0x3aa6dd, transparent: true, opacity: 0.35 }));
+    decoWater.position.y = DECO_Y + decoH / 2;
+    const decoGlass = new THREE.Mesh(new THREE.BoxGeometry(1.94, decoH, 0.62), glassMat);
+    decoGlass.position.y = DECO_Y + decoH / 2;
+    const cap = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.09, 0.7), navyMat);
+    cap.position.y = DECO_Y + decoH + 0.045;
+    const capTrim = new THREE.Mesh(new THREE.BoxGeometry(2.02, 0.04, 0.72), trimMat);
+    capTrim.position.y = DECO_Y + decoH + 0.11;
+    this.group.add(decoGlow, decoWater, decoGlass, cap, capTrim);
+
     this.addDecorations();
     this.addBubbles();
+    this.addAmbientFish();
     scene.add(this.group);
 
     const cx = slot.x, cz = slot.z;
-    const hw = slot.rotY === 0 ? 0.95 : 0.38, hd = slot.rotY === 0 ? 0.38 : 0.95;
+    const hw = slot.rotY === 0 ? 1.0 : 0.4, hd = slot.rotY === 0 ? 0.4 : 1.0;
     colliders.push({ minX: cx - hw, maxX: cx + hw, minZ: cz - hd, maxZ: cz + hd });
 
     this.fishMeshes = []; // { mesh, tail, target, speed, phase }
@@ -324,7 +432,7 @@ export class TankUnit {
 
   addDecorations() {
     const r = seededRand(this.slotIndex + 7);
-    const floorY = 0.85 + 0.11;
+    const floorY = MAIN_Y + 0.1;
     // coral clusters
     const nCoral = 1 + Math.floor(r() * 2);
     for (let c = 0; c < nCoral; c++) {
@@ -339,14 +447,14 @@ export class TankUnit {
         branch.rotation.x = (r() - 0.5) * 0.5;
         cluster.add(branch);
       }
-      cluster.position.set(-0.65 + r() * 1.3, floorY, (r() - 0.5) * 0.36);
+      cluster.position.set(-0.7 + r() * 1.4, floorY, (r() - 0.5) * 0.34);
       this.group.add(cluster);
     }
     // seaweed strands
-    const nWeed = 2 + Math.floor(r() * 2);
+    const nWeed = 2 + Math.floor(r() * 3);
     for (let w = 0; w < nWeed; w++) {
-      const x = -0.7 + r() * 1.4, z = (r() - 0.5) * 0.38;
-      const h = 0.25 + r() * 0.3;
+      const x = -0.75 + r() * 1.5, z = (r() - 0.5) * 0.36;
+      const h = 0.3 + r() * 0.4;
       const weed = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.02, h, 5), mat(0x52b788));
       weed.position.set(x, floorY + h / 2, z);
       weed.rotation.z = (r() - 0.5) * 0.3;
@@ -356,9 +464,16 @@ export class TankUnit {
     for (let p = 0; p < 4; p++) {
       const peb = new THREE.Mesh(new THREE.SphereGeometry(0.025 + r() * 0.025, 6, 5),
         mat(p % 2 ? 0x8d99ae : 0xadb5bd));
-      peb.position.set(-0.7 + r() * 1.4, floorY, (r() - 0.5) * 0.4);
+      peb.position.set(-0.7 + r() * 1.4, floorY, (r() - 0.5) * 0.38);
       peb.scale.y = 0.6;
       this.group.add(peb);
+    }
+    // plants in the upper display tank too
+    for (let w = 0; w < 3; w++) {
+      const h = 0.18 + r() * 0.18;
+      const weed = new THREE.Mesh(new THREE.CylinderGeometry(0.01, 0.018, h, 5), mat(0x74c69d));
+      weed.position.set(-0.75 + r() * 1.5, DECO_Y + 0.04 + h / 2, (r() - 0.5) * 0.3);
+      this.group.add(weed);
     }
   }
 
@@ -369,11 +484,26 @@ export class TankUnit {
     const bx = -0.6 + r() * 1.2, bz = (r() - 0.5) * 0.3;
     for (let i = 0; i < 5; i++) {
       const b = new THREE.Mesh(new THREE.SphereGeometry(0.012 + r() * 0.012, 5, 4), bubMat);
-      b.position.set(bx, 0.97 + r() * 0.6, bz);
+      b.position.set(bx, MAIN_Y + 0.15 + r() * (MAIN_H - 0.3), bz);
       b.userData.speed = 0.12 + r() * 0.1;
       b.userData.wob = r() * 6;
       this.group.add(b);
       this.bubbles.push(b);
+    }
+  }
+
+  addAmbientFish() {
+    this.ambientFish = [];
+    const r = seededRand(this.slotIndex + 77);
+    const n = 2 + Math.floor(r() * 2);
+    for (let i = 0; i < n; i++) {
+      const species = FISH[Math.floor(r() * FISH.length)];
+      const { group, tail } = buildFishMesh(species, 0.55);
+      const target = () => new THREE.Vector3(
+        (r() - 0.5) * 1.5, DECO_Y + 0.12 + r() * 0.28, (r() - 0.5) * 0.3);
+      group.position.copy(target());
+      this.ambientFish.push({ mesh: group, tail, target: target(), speed: 0.1 + r() * 0.12, phase: r() * 6, newTarget: target });
+      this.group.add(group);
     }
   }
 
@@ -398,17 +528,18 @@ export class TankUnit {
 
   randomSwimPoint() {
     return new THREE.Vector3(
-      (Math.random() - 0.5) * 1.35,
-      1.08 + Math.random() * 0.42,
-      (Math.random() - 0.5) * 0.36
+      (Math.random() - 0.5) * 1.5,
+      MAIN_Y + 0.22 + Math.random() * (MAIN_H - 0.42),
+      (Math.random() - 0.5) * 0.34
     );
   }
 
   setCare(care) {
     const t = Math.max(0, Math.min(1, care / 100));
-    // clean blue -> murky green
+    // clean blue -> murky green; backlight dims as the tank fouls
     this.waterMat.color.setHex(0x3aa6dd).lerp(new THREE.Color(0x5a7f3d), 1 - t);
-    this.waterMat.opacity = 0.45 + (1 - t) * 0.35;
+    this.waterMat.opacity = 0.4 + (1 - t) * 0.38;
+    this.glowMat.color.setHex(0x3ec3f7).lerp(new THREE.Color(0x4a5a35), 1 - t);
   }
 
   update(dt) {
@@ -422,24 +553,49 @@ export class TankUnit {
       f.mesh.rotation.y += (yaw - f.mesh.rotation.y) * Math.min(1, dt * 4);
       f.tail.rotation.y = Math.sin(this.time * 9 + f.phase) * 0.5;
     }
+    for (const f of this.ambientFish) {
+      const d = f.target.clone().sub(f.mesh.position);
+      if (d.length() < 0.06) { f.target = f.newTarget(); continue; }
+      d.normalize();
+      f.mesh.position.addScaledVector(d, f.speed * dt);
+      const yaw = Math.atan2(-d.z, d.x);
+      f.mesh.rotation.y += (yaw - f.mesh.rotation.y) * Math.min(1, dt * 4);
+      f.tail.rotation.y = Math.sin(this.time * 8 + f.phase) * 0.5;
+    }
     for (const b of this.bubbles) {
       b.position.y += b.userData.speed * dt;
       b.position.x += Math.sin(this.time * 3 + b.userData.wob) * 0.01 * dt * 60;
-      if (b.position.y > 1.55) b.position.y = 0.97;
+      if (b.position.y > MAIN_Y + MAIN_H - 0.12) b.position.y = MAIN_Y + 0.15;
     }
   }
 }
 
 /* ---------------- Shelf unit ---------------- */
 
-function productGeometry(prod) {
-  if (prod.shape === "cyl") return new THREE.CylinderGeometry(0.075, 0.075, 0.24, 10);
-  if (prod.shape === "bag") {
-    const g = new THREE.SphereGeometry(0.1, 8, 6);
-    g.scale(1, 1.25, 0.7);
-    return g;
+function productMesh(prod) {
+  const g = new THREE.Group();
+  const body = mat(prod.color);
+  if (prod.shape === "cyl") {
+    const can = new THREE.Mesh(new THREE.CylinderGeometry(0.085, 0.085, 0.26, 10), body);
+    can.position.y = 0.13;
+    const lid = new THREE.Mesh(new THREE.CylinderGeometry(0.087, 0.087, 0.04, 10), mat(TRIM));
+    lid.position.y = 0.26;
+    g.add(can, lid);
+  } else if (prod.shape === "bag") {
+    const bag = new THREE.Mesh(new THREE.SphereGeometry(0.105, 8, 6), body);
+    bag.scale.set(1, 1.3, 0.7);
+    bag.position.y = 0.13;
+    const clip = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.035, 0.03), mat(TRIM));
+    clip.position.y = 0.27;
+    g.add(bag, clip);
+  } else {
+    const box = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.27, 0.16), body);
+    box.position.y = 0.135;
+    const label = new THREE.Mesh(new THREE.BoxGeometry(0.205, 0.09, 0.165), mat(TRIM));
+    label.position.y = 0.16;
+    g.add(box, label);
   }
-  return new THREE.BoxGeometry(0.17, 0.24, 0.17);
+  return g;
 }
 
 export class ShelfUnit {
@@ -450,13 +606,14 @@ export class ShelfUnit {
     this.group.position.set(slot.x, 0, slot.z);
     this.group.rotation.y = slot.rotY;
 
-    const frameMat = mat(0x6c757d);
-    const back = new THREE.Mesh(new THREE.BoxGeometry(1.9, 2.0, 0.06), mat(0x5a626a));
+    // warm white retail shelving with a teal header
+    const frameMat = mat(0xede4d3);
+    const back = new THREE.Mesh(new THREE.BoxGeometry(1.9, 2.0, 0.06), mat(0xe3d9c6));
     back.position.set(0, 1.0, -0.22);
     back.castShadow = true;
     this.group.add(back);
     for (const sx of [-0.94, 0.94]) {
-      const side = new THREE.Mesh(new THREE.BoxGeometry(0.05, 2.0, 0.5), frameMat);
+      const side = new THREE.Mesh(new THREE.BoxGeometry(0.06, 2.0, 0.5), frameMat);
       side.position.set(sx, 1.0, 0);
       this.group.add(side);
     }
@@ -465,12 +622,16 @@ export class ShelfUnit {
       board.position.y = 0.25 + i * 0.58;
       this.group.add(board);
     }
+    const headerBand = new THREE.Mesh(new THREE.BoxGeometry(1.96, 0.18, 0.52), mat(0x2a9d8f));
+    headerBand.position.y = 2.12;
+    this.group.add(headerBand);
+
     // Invisible interaction volume covering the shelf
     this.hit = new THREE.Mesh(
-      new THREE.BoxGeometry(1.95, 2.1, 0.6),
+      new THREE.BoxGeometry(1.95, 2.2, 0.6),
       new THREE.MeshBasicMaterial({ visible: false })
     );
-    this.hit.position.y = 1.05;
+    this.hit.position.y = 1.1;
     this.hit.userData.interact = { type: "shelf", unit: this };
     this.group.add(this.hit);
 
@@ -483,7 +644,7 @@ export class ShelfUnit {
     this.stockMeshes = [];
   }
 
-  // rows: [{ product, count }]
+  // rows: [{ product, count }] — packed 4 wide x 2 deep so full rows look full
   syncStock(rows) {
     for (const m of this.stockMeshes) this.group.remove(m);
     this.stockMeshes = [];
@@ -491,12 +652,12 @@ export class ShelfUnit {
     rows.forEach((row, ri) => {
       if (!row.product || row.count <= 0) return;
       const prod = item(row.product);
-      const geo = productGeometry(prod);
-      const m = mat(prod.color);
-      for (let i = 0; i < Math.min(row.count, ROW_CAP); i++) {
-        const piece = new THREE.Mesh(geo, m);
-        piece.position.set(-0.78 + i * 0.215, 0.25 + ri * 0.58 + 0.15, 0.05);
-        piece.rotation.y = (r() - 0.5) * 0.5;
+      const shown = Math.min(row.count, ROW_CAP);
+      for (let i = 0; i < shown; i++) {
+        const piece = productMesh(prod);
+        const col = i % 4, depth = Math.floor(i / 4);
+        piece.position.set(-0.66 + col * 0.44, 0.275 + ri * 0.58, 0.12 - depth * 0.24);
+        piece.rotation.y = (r() - 0.5) * 0.35;
         this.group.add(piece);
         this.stockMeshes.push(piece);
       }
