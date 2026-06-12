@@ -305,6 +305,15 @@ body.touch #btn-interact:not(.hidden) { display: block; }
   font-size: 1.05rem;
 }
 .tab-note { color: var(--dim); font-size: 0.85rem; margin-bottom: 10px; }
+.order-section {
+  color: var(--accent);
+  font-weight: 800;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin: 12px 0 6px;
+}
+.order-section:first-child { margin-top: 0; }
 .help-text p { font-size: 0.9rem; line-height: 1.5; margin-bottom: 10px; }
 
 /* ---------- Day summary ---------- */
