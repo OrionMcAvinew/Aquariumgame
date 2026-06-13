@@ -199,6 +199,7 @@ body.touch #btn-interact:not(.hidden) { display: block; }
   overflow: hidden;
 }
 .patience-fill { height: 100%; background: var(--good); transition: width 1s linear; }
+.checkout-hint { font-size: 0.74rem; color: var(--dim); margin: 8px 0 2px; text-align: center; }
 .checkout-actions { display: flex; gap: 8px; }
 .checkout-actions .ui-btn { flex: 1; padding: 12px; font-size: 1rem; }
 

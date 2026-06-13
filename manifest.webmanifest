@@ -1,0 +1,16 @@
+{
+  "name": "Fin & Fortune — Aquarium Store Sim",
+  "short_name": "Fin & Fortune",
+  "description": "Run your own first-person 3D aquarium store: stock tanks, tend coral reefs, and ring up customers.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "fullscreen",
+  "orientation": "landscape",
+  "background_color": "#06283d",
+  "theme_color": "#06283d",
+  "icons": [
+    { "src": "assets/icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "assets/icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "assets/icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

@@ -203,6 +203,18 @@ export class Player {
         if (this.carry && item(this.carry.itemId).kind === "product") {
           found = { type: "stock-shelf", unit: info.unit, shelfIdx: ownedIdx, label: `Stock ${item(this.carry.itemId).name}` };
         }
+      } else if (info.type === "scanItem") {
+        if (!info.entry.scanned) {
+          const it = item(info.entry.id);
+          found = { type: "scanItem", checkout: info.checkout, entry: info.entry, label: `Scan ${it.name} — $${info.entry.price}` };
+        }
+      } else if (info.type === "register") {
+        const co = info.checkout;
+        if (co.customer) {
+          found = co.allScanned()
+            ? { type: "charge", checkout: co, label: `Charge $${co.total()} — take payment` }
+            : { type: "none", label: `Scan all items first (${co.scannedCount()}/${co.items.length})` };
+        }
       }
       if (found) break;
     }
@@ -262,6 +274,11 @@ export class Player {
       g.sound.splash();
       g.ui.toast("✨ Tank fed and cleaned");
       g.save();
+    } else if (t.type === "scanItem") {
+      t.checkout.scan(t.entry);
+      g.ui.updateCheckout();
+    } else if (t.type === "charge") {
+      t.checkout.charge();
     } else if (t.type === "drop") {
       const f = new THREE.Vector3(Math.sin(this.yaw) * -1, 0, Math.cos(this.yaw) * -1);
       const pos = this.pos.clone().addScaledVector(f, 0.9);

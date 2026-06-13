@@ -28,10 +28,10 @@ export class UI {
     }
     document.addEventListener("keydown", (e) => {
       if (e.key === "Escape") this.toggleTablet(false);
-      const c = this.activeCheckoutCustomer();
-      if (c) {
-        if (e.code === "Space") { e.preventDefault(); this.game.customers.scanNext(c); this.renderCheckout(); }
-        if (e.key === "Enter") { this.game.customers.takePayment(c); }
+      const co = this.game.checkout;
+      if (co && co.customer && this.game.player.inRegisterZone()) {
+        if (e.code === "Space") { e.preventDefault(); co.scan(co.items.find((i) => !i.scanned)); this.updateCheckout(); }
+        if (e.key === "Enter") { co.charge(); }
       }
     });
   }
@@ -241,6 +241,21 @@ export class UI {
         g.save();
       });
 
+    const saveRow = document.createElement("div");
+    saveRow.className = "order-row";
+    saveRow.innerHTML = `<div class="order-info"><b>💾 Save game</b><small>Autosaves to this browser; tap to save right now</small></div>`;
+    const saveBtn = document.createElement("button");
+    saveBtn.className = "ui-btn primary";
+    saveBtn.textContent = "Save now";
+    saveBtn.addEventListener("click", () => {
+      g.save();
+      saveBtn.textContent = "Saved ✓";
+      this.toast("💾 Game saved", "good");
+      setTimeout(() => { saveBtn.textContent = "Save now"; }, 1500);
+    });
+    saveRow.appendChild(saveBtn);
+    body.appendChild(saveRow);
+
     const danger = document.createElement("button");
     danger.className = "ui-btn danger";
     danger.textContent = "Reset save & start over";
@@ -256,7 +271,8 @@ export class UI {
         <p><b>Goal:</b> grow your aquarium shop. Order stock, fill your tanks and shelves, and ring up customers at the register.</p>
         <p><b>📦 Stock:</b> order boxes here in the tablet. They arrive on the pallet by the door. Carry a box to a tank (fish) or shelf (supplies) and stock it.</p>
         <p><b>🧽 Care:</b> tanks get dirty over time — customers won't buy fish from murky water. Look at a tank with empty hands to feed &amp; clean it.</p>
-        <p><b>💳 Checkout:</b> stand behind the counter when someone's waiting, scan every item, then take payment. Don't make the line wait too long!</p>
+        <p><b>💳 Checkout:</b> when a shopper reaches the counter their items appear on it. Stand behind the register, look at each item and press E (or tap USE) to scan it onto the belt, then look at the register and charge. Don't make the line wait too long!</p>
+        <p><b>💾 Saving:</b> the game autosaves continuously to this browser. You can also tap <b>Save now</b> in the Store tab.</p>
         <p><b>📈 Levels:</b> every $1 of sales is 1 XP. Leveling up unlocks new species, products, and more customers.</p>
         <p class="controls-note"><b>Controls:</b> WASD move · mouse look (click to capture) · E interact · TAB tablet · SHIFT run.<br>
         On touch: left side = move stick, right side = look, buttons for the rest.</p>
@@ -266,61 +282,61 @@ export class UI {
 
   /* ---------------- Checkout panel ---------------- */
 
-  activeCheckoutCustomer() {
-    if ($("checkout").classList.contains("hidden")) return null;
-    return this.game.customers.atCounter();
-  }
-
   updateCheckout() {
     const g = this.game;
-    const customer = g.customers.atCounter();
+    const co = g.checkout;
+    const customer = co && co.customer;
     const show = customer && g.player.inRegisterZone();
     const panel = $("checkout");
-    const wasHidden = panel.classList.contains("hidden");
     panel.classList.toggle("hidden", !show);
-    if (show && (wasHidden || customer.id !== this.checkoutCustomerId)) {
-      this.checkoutCustomerId = customer.id;
+    if (!show) { this.checkoutCustomerId = null; return; }
+    // re-render when the customer or the scanned set changes
+    const sig = customer.id + ":" + co.scannedCount();
+    if (sig !== this.checkoutCustomerId) {
+      this.checkoutCustomerId = sig;
       this.renderCheckout();
-    } else if (show) {
-      // keep the patience bar fresh
-      const fill = panel.querySelector(".patience-fill");
-      if (fill) fill.style.width = `${(customer.patience / QUEUE_PATIENCE) * 100}%`;
     }
+    const fill = panel.querySelector(".patience-fill");
+    if (fill) fill.style.width = `${(customer.patience / QUEUE_PATIENCE) * 100}%`;
   }
 
   renderCheckout() {
     const g = this.game;
-    const c = g.customers.atCounter();
-    if (!c) return;
+    const co = g.checkout;
+    if (!co.customer) return;
     const body = $("checkout-body");
     body.innerHTML = "";
-    let total = 0, allScanned = true;
-    for (const it of c.cart) {
-      total += it.price;
-      if (!it.scanned) allScanned = false;
+    for (const it of co.items) {
       const row = document.createElement("div");
       row.className = "scan-row" + (it.scanned ? " scanned" : "");
       row.innerHTML = `<span>${it.label}</span><span>$${it.price}</span>`;
       body.appendChild(row);
     }
+    const hint = document.createElement("div");
+    hint.className = "checkout-hint";
+    hint.textContent = g.player.isTouch
+      ? "Look at each item and tap USE to scan"
+      : "Look at each item and press E to scan";
+    body.appendChild(hint);
+
     const bar = document.createElement("div");
     bar.className = "patience-track";
-    bar.innerHTML = `<div class="patience-fill" style="width:${(c.patience / QUEUE_PATIENCE) * 100}%"></div>`;
+    bar.innerHTML = `<div class="patience-fill" style="width:${(co.customer.patience / QUEUE_PATIENCE) * 100}%"></div>`;
     body.appendChild(bar);
 
     const actions = document.createElement("div");
     actions.className = "checkout-actions";
-    if (!allScanned) {
+    if (!co.allScanned()) {
       const scan = document.createElement("button");
       scan.className = "ui-btn primary";
-      scan.textContent = g.player.isTouch ? "SCAN ITEM" : "SCAN ITEM (Space)";
-      scan.addEventListener("click", () => { g.customers.scanNext(c); this.renderCheckout(); });
+      scan.textContent = `Scan next (${co.scannedCount()}/${co.items.length})`;
+      scan.addEventListener("click", () => { co.scan(co.items.find((i) => !i.scanned)); this.updateCheckout(); });
       actions.appendChild(scan);
     } else {
       const pay = document.createElement("button");
       pay.className = "ui-btn pay";
-      pay.textContent = (g.player.isTouch ? `TAKE $${total}` : `TAKE $${total} (Enter)`);
-      pay.addEventListener("click", () => g.customers.takePayment(c));
+      pay.textContent = `Take payment · $${co.total()}`;
+      pay.addEventListener("click", () => co.charge());
       actions.appendChild(pay);
     }
     body.appendChild(actions);

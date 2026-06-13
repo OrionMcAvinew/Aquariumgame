@@ -4,7 +4,7 @@ import {
   CATALOG, item, DAY_LEN, CARE_DECAY_PER_DAY, xpForLevel, MAX_LEVEL,
   PALLET, REGISTER_ZONE, SHELF_ROWS,
 } from "./data.js";
-import { buildRoom, TankUnit, ShelfUnit, createBoxMesh, loadFishAssets } from "./world.js";
+import { buildRoom, TankUnit, ShelfUnit, createBoxMesh, loadFishAssets, Checkout } from "./world.js";
 import { Player } from "./player.js";
 import { CustomerManager } from "./customers.js";
 import { UI } from "./ui.js";
@@ -145,6 +145,7 @@ function endDay() {
   s.time = 0;
   s.stats = freshStats();
   game.customers.clearAll();
+  game.checkout?.clear();
   game.ui.showSummary(s.day - 1, stats, rent);
   if (s.cash < 0) game.ui.toast("⚠️ You're in the red — sell hard tomorrow!", "bad");
   game.save();
@@ -201,6 +202,7 @@ function init() {
   game.ui = new UI(game);
   game.player = new Player(game);
   game.customers = new CustomerManager(game);
+  game.checkout = new Checkout(game);
 
   for (let i = 0; i < game.state.tanksOwned; i++) game.addTankUnit(true);
   for (let i = 0; i < game.state.shelvesOwned; i++) game.addShelfUnit(true);
@@ -263,6 +265,11 @@ function loop(now) {
     });
 
     game.customers.update(dt);
+    // physical checkout: spawn the at-counter customer's items on the counter
+    const atc = game.customers.atCounter();
+    if (atc) { if (game.checkout.customer !== atc) game.checkout.present(atc); }
+    else if (game.checkout.customer) game.checkout.clear();
+    game.checkout.update(dt);
     for (const t of game.tankUnits) t.update(dt);
   }
 
