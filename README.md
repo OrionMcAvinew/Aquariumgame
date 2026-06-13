@@ -13,6 +13,20 @@ python3 -m http.server 8000
 
 (Opening `index.html` directly won't work because the game uses ES modules — any static server is fine.)
 
+## Install it on your phone (PWA)
+
+Fin & Fortune is a Progressive Web App, so you can add it to your home screen and it runs fullscreen like a native app (and works offline after the first load).
+
+1. **Host it over HTTPS.** The easiest free option is **GitHub Pages**: in the repo, go to *Settings → Pages → Build and deployment*, set *Source = Deploy from a branch*, pick `main` / root, and save. After a minute your game is live at `https://<your-user>.github.io/Aquariumgame/`. (Any static HTTPS host works — Netlify, Vercel, Cloudflare Pages, etc.)
+2. **Open that URL on your phone.**
+   - **iPhone/iPad (Safari):** tap the Share button → *Add to Home Screen*.
+   - **Android (Chrome):** tap the ⋮ menu → *Install app* / *Add to Home screen*.
+3. Launch it from the new home-screen icon — it opens fullscreen with the touch controls.
+
+## Saving
+
+The game **autosaves continuously** to your browser (localStorage) — every few seconds, on every sale/stock action, and when you close the tab. You can also hit **Save now** in the Tablet's *Store* tab for an explicit save. Because the save lives in the browser, it persists per-device; clearing site data or using a different browser starts fresh. *Reset save & start over* (also in the Store tab) wipes it.
+
 ## How to play
 
 You walk the shop floor in first person and do everything yourself:

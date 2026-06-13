@@ -1339,3 +1339,148 @@ export function createCustomerMesh() {
   g.userData.basket = basket;
   return g;
 }
+
+/* ---------------- Checkout (physical register) ---------------- */
+
+// A bagged fish: a knotted water bag with the fish sprite floating inside.
+function buildFishBag(species) {
+  const g = new THREE.Group();
+  const bagMat = new THREE.MeshPhongMaterial({ color: 0xbfe6f5, transparent: true, opacity: 0.4, shininess: 90 });
+  const bag = new THREE.Mesh(new THREE.SphereGeometry(0.11, 12, 10), bagMat);
+  bag.scale.set(0.85, 1.08, 0.85); bag.position.y = 0.12;
+  const water = new THREE.Mesh(new THREE.SphereGeometry(0.092, 12, 10),
+    new THREE.MeshLambertMaterial({ color: 0x6fd0f0, transparent: true, opacity: 0.45 }));
+  water.scale.set(0.85, 0.78, 0.85); water.position.y = 0.1;
+  const tex = fishTexture(species);
+  const f = new THREE.Mesh(new THREE.PlaneGeometry(0.1, 0.1 * tex.userData.aspect), spriteMat(tex));
+  f.position.set(0, 0.1, 0.02);
+  const knot = new THREE.Mesh(new THREE.SphereGeometry(0.03, 8, 6), new THREE.MeshLambertMaterial({ color: 0xeaf6ff }));
+  knot.position.y = 0.225;
+  g.add(bag, water, f, knot);
+  g.castShadow = true;
+  return g;
+}
+
+export class Checkout {
+  constructor(game) {
+    this.game = game;
+    this.items = [];      // refs to the customer's cart entries, each with _mesh/_target
+    this.customer = null;
+
+    // little register screen showing the running total
+    const c = document.createElement("canvas");
+    c.width = 256; c.height = 128;
+    this._ctx = c.getContext("2d");
+    this._tex = new THREE.CanvasTexture(c);
+    this._tex.colorSpace = THREE.SRGBColorSpace;
+    const screen = new THREE.Mesh(new THREE.PlaneGeometry(0.34, 0.17),
+      new THREE.MeshBasicMaterial({ map: this._tex }));
+    screen.position.set(COUNTER.x - COUNTER.w / 2 + 0.45, COUNTER.h + 0.36, COUNTER.z + 0.2);
+    game.scene.add(screen);
+
+    // generous invisible hitbox over the register for "charge"
+    const hit = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.55, 0.7),
+      new THREE.MeshBasicMaterial({ visible: false }));
+    hit.position.set(COUNTER.x - COUNTER.w / 2 + 0.45, COUNTER.h + 0.28, COUNTER.z + 0.12);
+    hit.userData.interact = { type: "register", checkout: this };
+    game.scene.add(hit);
+    game.interactables.push(hit);
+
+    this._draw();
+  }
+
+  present(customer) {
+    this.clear();
+    this.customer = customer;
+    const cart = customer.cart;
+    const n = cart.length;
+    cart.forEach((entry, i) => {
+      entry.scanned = false;
+      const it = item(entry.id);
+      const mesh = it.kind === "fish" ? buildFishBag(it) : (() => { const m = productMesh(it); m.scale.setScalar(1.15); return m; })();
+      const slot = this._incoming(i, n);
+      mesh.position.set(slot.x, COUNTER.h + 0.05, slot.z);
+      mesh.rotation.y = (i % 2 ? 0.3 : -0.3);
+      mesh.userData.interact = { type: "scanItem", checkout: this, entry };
+      entry._mesh = mesh; entry._target = null;
+      this.game.scene.add(mesh);
+      this.game.interactables.push(mesh);
+      this.items.push(entry);
+    });
+    this._draw();
+  }
+
+  _incoming(i, n) {
+    const spread = Math.min(1.9, Math.max(0.4, (n - 1) * 0.42));
+    const x = n <= 1 ? COUNTER.x : COUNTER.x - spread / 2 + spread * i / (n - 1);
+    return { x, z: COUNTER.z - 0.26 }; // customer side of the belt
+  }
+
+  scan(entry) {
+    if (!entry || entry.scanned) return;
+    entry.scanned = true;
+    this.game.sound.scan();
+    const bi = this.scannedCount() - 1;
+    entry._target = {
+      x: COUNTER.x + COUNTER.w / 2 - 0.62 + (bi % 2) * 0.22,
+      z: COUNTER.z + 0.3, // player/bagging side
+    };
+    const idx = this.game.interactables.indexOf(entry._mesh);
+    if (idx >= 0) this.game.interactables.splice(idx, 1); // can't rescan
+    this._draw();
+  }
+
+  allScanned() { return this.items.length > 0 && this.items.every((e) => e.scanned); }
+  total() { return this.items.reduce((s, e) => s + e.price, 0); }
+  scannedSum() { return this.items.filter((e) => e.scanned).reduce((s, e) => s + e.price, 0); }
+  scannedCount() { return this.items.filter((e) => e.scanned).length; }
+
+  charge() {
+    if (!this.customer || !this.allScanned()) return false;
+    const c = this.customer;
+    this.clear();
+    this.game.customers.takePayment(c);
+    return true;
+  }
+
+  clear() {
+    for (const e of this.items) {
+      if (e._mesh) {
+        this.game.scene.remove(e._mesh);
+        const i = this.game.interactables.indexOf(e._mesh);
+        if (i >= 0) this.game.interactables.splice(i, 1);
+      }
+      e._mesh = null; e._target = null;
+    }
+    this.items = [];
+    this.customer = null;
+    this._draw();
+  }
+
+  update(dt) {
+    for (const e of this.items) {
+      if (e._mesh && e._target) {
+        const m = e._mesh, t = e._target;
+        m.position.x += (t.x - m.position.x) * Math.min(1, dt * 9);
+        m.position.z += (t.z - m.position.z) * Math.min(1, dt * 9);
+        m.rotation.y += dt * 2.5;
+      }
+    }
+  }
+
+  _draw() {
+    const ctx = this._ctx;
+    ctx.fillStyle = "#06140f"; ctx.fillRect(0, 0, 256, 128);
+    ctx.fillStyle = "#0a3a2a"; ctx.fillRect(8, 8, 240, 112);
+    ctx.fillStyle = "#9effc8"; ctx.textAlign = "left";
+    ctx.font = "bold 22px monospace";
+    ctx.fillText("REGISTER", 20, 34);
+    ctx.font = "bold 16px monospace";
+    ctx.fillText(this.items.length ? `${this.scannedCount()}/${this.items.length} scanned` : "waiting…", 20, 60);
+    ctx.textAlign = "right";
+    ctx.font = "bold 42px monospace";
+    ctx.fillStyle = this.allScanned() ? "#ffe066" : "#9effc8";
+    ctx.fillText("$" + this.scannedSum(), 238, 104);
+    this._tex.needsUpdate = true;
+  }
+}
