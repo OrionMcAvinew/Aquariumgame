@@ -1023,7 +1023,23 @@ export class TankUnit {
       new THREE.MeshBasicMaterial({ color: 0xf4fcff }));
     strip.position.y = MAIN_Y + MAIN_H - 0.02;
 
-    this.group.add(cabinet, kick, cabTrim, glow, this.water, this.glass, gravel, hood, strip);
+    // shimmering water surface near the top of the tank
+    this.surfaceMat = new THREE.MeshBasicMaterial({
+      color: 0xbff0ff, transparent: true, opacity: 0.14,
+      blending: THREE.AdditiveBlending, depthWrite: false,
+    });
+    const surface = new THREE.Mesh(new THREE.PlaneGeometry(1.82, 0.6), this.surfaceMat);
+    surface.rotation.x = -Math.PI / 2;
+    surface.position.y = MAIN_Y + MAIN_H - 0.14;
+    this.surface = surface;
+
+    // angled reflection streak on the front glass
+    const highlight = new THREE.Mesh(new THREE.PlaneGeometry(0.4, MAIN_H * 1.2),
+      new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.07, blending: THREE.AdditiveBlending, depthWrite: false }));
+    highlight.position.set(-0.45, MAIN_Y + MAIN_H / 2, 0.36);
+    highlight.rotation.z = 0.5;
+
+    this.group.add(cabinet, kick, cabTrim, glow, this.water, this.glass, gravel, hood, strip, surface, highlight);
 
     // upper decorative display tank (ambient fish, pure vibes)
     const decoH = 0.5;
@@ -1052,7 +1068,8 @@ export class TankUnit {
     const hw = slot.rotY === 0 ? 1.0 : 0.4, hd = slot.rotY === 0 ? 0.4 : 1.0;
     colliders.push({ minX: cx - hw, maxX: cx + hw, minZ: cz - hd, maxZ: cz + hd });
 
-    this.fishMeshes = []; // { mesh, tail, target, speed, phase }
+    this.fishMeshes = []; // { mesh, tail, species, school, target, speed, phase }
+    this.schoolAnchors = {};
     this.time = Math.random() * 10;
   }
 
@@ -1194,13 +1211,15 @@ export class TankUnit {
       this.group.remove(f.mesh);
     }
     while (this.fishMeshes.length < fishList.length) {
-      const species = item(fishList[this.fishMeshes.length]);
+      const sid = fishList[this.fishMeshes.length];
+      const species = item(sid);
       const { group, tail } = buildFishMesh(species);
       group.position.copy(this.randomSwimPoint());
+      if (species.school) this.ensureAnchor(sid);
       this.fishMeshes.push({
-        mesh: group, tail,
-        target: this.randomSwimPoint(),
-        speed: 0.16 + Math.random() * 0.18,
+        mesh: group, tail, species: sid, school: !!species.school,
+        target: species.school ? this.schoolTargetFor(sid) : this.randomSwimPoint(),
+        speed: species.school ? 0.26 + Math.random() * 0.06 : 0.16 + Math.random() * 0.18,
         phase: Math.random() * 6,
       });
       this.group.add(group);
@@ -1215,6 +1234,18 @@ export class TankUnit {
     );
   }
 
+  // A wandering anchor per schooling species keeps the shoal moving together.
+  ensureAnchor(sid) {
+    if (!this.schoolAnchors[sid]) {
+      this.schoolAnchors[sid] = { pos: this.randomSwimPoint(), target: this.randomSwimPoint() };
+    }
+  }
+  schoolTargetFor(sid) {
+    this.ensureAnchor(sid);
+    return this.schoolAnchors[sid].pos.clone().add(new THREE.Vector3(
+      (Math.random() - 0.5) * 0.35, (Math.random() - 0.5) * 0.22, (Math.random() - 0.5) * 0.18));
+  }
+
   setCare(care) {
     const t = Math.max(0, Math.min(1, care / 100));
     // clean blue -> murky green; backlight dims as the tank fouls
@@ -1225,9 +1256,16 @@ export class TankUnit {
 
   update(dt) {
     this.time += dt;
+    // drift each shoal's anchor around the tank
+    for (const sid in this.schoolAnchors) {
+      const a = this.schoolAnchors[sid];
+      const d = a.target.clone().sub(a.pos);
+      if (d.length() < 0.12) a.target = this.randomSwimPoint();
+      else a.pos.addScaledVector(d.normalize(), 0.18 * dt);
+    }
     for (const f of this.fishMeshes) {
       const d = f.target.clone().sub(f.mesh.position);
-      if (d.length() < 0.08) { f.target = this.randomSwimPoint(); continue; }
+      if (d.length() < 0.08) { f.target = f.school ? this.schoolTargetFor(f.species) : this.randomSwimPoint(); continue; }
       d.normalize();
       f.mesh.position.addScaledVector(d, f.speed * dt);
       const yaw = Math.atan2(-d.z, d.x);
@@ -1260,6 +1298,7 @@ export class TankUnit {
       this.causticTex.offset.x = this.time * 0.02;
       this.causticTex.offset.y = Math.sin(this.time * 0.3) * 0.1;
     }
+    if (this.surfaceMat) this.surfaceMat.opacity = 0.1 + 0.06 * (0.5 + 0.5 * Math.sin(this.time * 1.3));
     if (this.floaties) {
       for (const f of this.floaties) {
         f.position.x += f.userData.vx * dt;
@@ -1496,20 +1535,42 @@ const SKIN = [0xf1c27d, 0xe0ac69, 0xc68642, 0x8d5524, 0xffdbac];
 const SHIRT = [0xe63946, 0x457b9d, 0x2a9d8f, 0xf4a261, 0x9d4edd, 0x118ab2, 0xef476f];
 const HAIR = [0x2b2d42, 0x6f4518, 0xbf9b30, 0x778da9, 0x431407];
 
+const PANTS = [0x33415c, 0x2b2d42, 0x4a4e69, 0x5a3e2b, 0x355070];
+
 export function createCustomerMesh() {
   const g = new THREE.Group();
   const shirt = SHIRT[(Math.random() * SHIRT.length) | 0];
   const skin = SKIN[(Math.random() * SKIN.length) | 0];
-  const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.22, 0.62, 4, 8), mat(shirt));
-  body.position.y = 0.85;
-  body.castShadow = true;
-  const head = new THREE.Mesh(new THREE.SphereGeometry(0.135, 10, 8), mat(skin));
-  head.position.y = 1.5;
-  const hair = new THREE.Mesh(new THREE.SphereGeometry(0.14, 10, 8, 0, Math.PI * 2, 0, 1.2),
+  const pants = PANTS[(Math.random() * PANTS.length) | 0];
+  const skinMat = mat(skin);
+
+  const torso = new THREE.Mesh(new THREE.CapsuleGeometry(0.2, 0.46, 4, 8), mat(shirt));
+  torso.position.y = 0.98; torso.castShadow = true;
+  const hips = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.16, 0.14, 8), mat(pants));
+  hips.position.y = 0.7;
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.135, 12, 10), skinMat);
+  head.position.y = 1.46;
+  const hair = new THREE.Mesh(new THREE.SphereGeometry(0.142, 12, 10, 0, Math.PI * 2, 0, 1.15),
     mat(HAIR[(Math.random() * HAIR.length) | 0]));
-  hair.position.y = 1.52;
-  const legs = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.18, 0.5, 8), mat(0x33415c));
-  legs.position.y = 0.25;
+  hair.position.y = 1.48;
+  const nose = new THREE.Mesh(new THREE.SphereGeometry(0.03, 6, 5), skinMat);
+  nose.position.set(0, 1.44, 0.13);
+
+  // limbs pivot from the top so they can swing while walking
+  const limb = (w, h, m, x, y) => {
+    const pivot = new THREE.Group();
+    pivot.position.set(x, y, 0);
+    const seg = new THREE.Mesh(new THREE.CapsuleGeometry(w, h, 3, 6), m);
+    seg.position.y = -h / 2 - w;
+    seg.castShadow = true;
+    pivot.add(seg);
+    return pivot;
+  };
+  const armL = limb(0.055, 0.34, mat(shirt), -0.24, 1.18);
+  const armR = limb(0.055, 0.34, mat(shirt), 0.24, 1.18);
+  const legL = limb(0.07, 0.4, mat(pants), -0.09, 0.66);
+  const legR = limb(0.07, 0.4, mat(pants), 0.09, 0.66);
+
   // shopping basket, shown once they're carrying something
   const basket = new THREE.Group();
   const tub = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.16, 0.2),
@@ -1517,10 +1578,13 @@ export function createCustomerMesh() {
   const handle = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.03, 0.03), mat(0x343a40));
   handle.position.y = 0.13;
   basket.add(tub, handle);
-  basket.position.set(0.32, 0.72, 0);
+  basket.position.set(0.34, 0.74, 0);
   basket.visible = false;
-  g.add(body, head, hair, legs, basket);
+
+  g.add(torso, hips, head, hair, nose, armL, armR, legL, legR, basket);
+  g.scale.setScalar(0.92 + Math.random() * 0.18); // height variation
   g.userData.basket = basket;
+  g.userData.limbs = { armL, armR, legL, legR };
   return g;
 }
 

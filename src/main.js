@@ -22,11 +22,14 @@ const game = {
 
 /* ---------------- State ---------------- */
 
+// Daily revenue target — meeting it pays a bonus at day's end.
+const goalFor = (level, day) => Math.round(120 + level * 55 + (day - 1) * 35);
+
 function defaultState() {
   const prices = {};
   for (const c of CATALOG) prices[c.id] = c.market;
   return {
-    cash: 300, day: 1, time: 0, level: 1, xp: 0,
+    cash: 300, day: 1, time: 0, level: 1, xp: 0, goal: goalFor(1, 1),
     tanksOwned: 2, shelvesOwned: 1,
     tanks: [
       { fish: ["guppy", "guppy", "guppy", "guppy"], care: 100 },
@@ -65,6 +68,7 @@ function loadState() {
     s.prices = { ...defaultPrices, ...d.prices };
     s.stats = { ...freshStats(), ...d.stats };
     s.boxes = (d.boxes || []).map((b) => ({ itemId: b.itemId, count: b.count, x: b.x, z: b.z }));
+    s.goal = goalFor(s.level, s.day); // keep the target in step with progress
     return s;
   } catch {
     return null;
@@ -140,13 +144,19 @@ function endDay() {
   const s = game.state;
   const rent = 20 + 8 * (s.tanksOwned + s.shelvesOwned);
   const stats = { ...s.stats };
+  const goal = s.goal;
+  const goalMet = stats.revenue >= goal;
+  const bonus = goalMet ? Math.round(goal * 0.2) + 25 : 0;
   s.cash -= rent;
+  if (bonus) s.cash += bonus;
   s.day++;
   s.time = 0;
   s.stats = freshStats();
+  s.goal = goalFor(s.level, s.day);
   game.customers.clearAll();
   game.checkout?.clear();
-  game.ui.showSummary(s.day - 1, stats, rent);
+  game.ui.showSummary(s.day - 1, stats, rent, goal, goalMet, bonus);
+  if (goalMet) game.ui.toast(`🎯 Daily goal hit! Bonus +$${bonus}`, "good");
   if (s.cash < 0) game.ui.toast("⚠️ You're in the red — sell hard tomorrow!", "bad");
   game.save();
 }

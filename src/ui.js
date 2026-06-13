@@ -26,6 +26,11 @@ export class UI {
     for (const tab of document.querySelectorAll(".tab-btn")) {
       tab.addEventListener("click", () => this.showTab(tab.dataset.tab));
     }
+    const audioBtn = $("btn-audio");
+    audioBtn.textContent = this.game.sound.ambientOn ? "🔊" : "🔇";
+    audioBtn.addEventListener("click", () => {
+      audioBtn.textContent = this.game.sound.toggleAmbient() ? "🔊" : "🔇";
+    });
     document.addEventListener("keydown", (e) => {
       if (e.key === "Escape") this.toggleTablet(false);
       const co = this.game.checkout;
@@ -52,6 +57,13 @@ export class UI {
     const cur = xpForLevel(s.level), next = xpForLevel(s.level + 1);
     const pct = s.level >= MAX_LEVEL ? 100 : ((s.xp - cur) / (next - cur)) * 100;
     $("xp-fill").style.width = `${Math.min(100, pct)}%`;
+
+    const rev = s.stats.revenue;
+    $("hud-rev").textContent = rev;
+    $("hud-goal").textContent = s.goal;
+    const gpct = Math.min(100, (rev / s.goal) * 100);
+    $("goal-fill").style.width = `${gpct}%`;
+    $("hud-goal-pill").classList.toggle("met", rev >= s.goal);
   }
 
   setPrompt(target) {
@@ -274,6 +286,8 @@ export class UI {
         <p><b>💳 Checkout:</b> when a shopper reaches the counter their items appear on it. Stand behind the register, look at each item and press E (or tap USE) to scan it onto the belt, then look at the register and charge. Don't make the line wait too long!</p>
         <p><b>💾 Saving:</b> the game autosaves continuously to this browser. You can also tap <b>Save now</b> in the Store tab.</p>
         <p><b>📈 Levels:</b> every $1 of sales is 1 XP. Leveling up unlocks new species, products, and more customers.</p>
+        <p><b>🎯 Daily goal:</b> hit the day's revenue target (shown in the HUD) to earn a cash bonus at closing time.</p>
+        <p><b>🔊 Sound:</b> toggle the ambient aquarium audio with the speaker button in the HUD.</p>
         <p class="controls-note"><b>Controls:</b> WASD move · mouse look (click to capture) · E interact · TAB tablet · SHIFT run.<br>
         On touch: left side = move stick, right side = look, buttons for the rest.</p>
       </div>
@@ -344,13 +358,14 @@ export class UI {
 
   /* ---------------- Day summary ---------------- */
 
-  showSummary(day, stats, rent) {
+  showSummary(day, stats, rent, goal = 0, goalMet = false, bonus = 0) {
     this.game.paused = true;
     document.exitPointerLock?.();
-    const net = stats.revenue - stats.spent - rent;
+    const net = stats.revenue - stats.spent - rent + bonus;
     $("summary-title").textContent = `Day ${day} complete!`;
     $("summary-body").innerHTML = `
       <div class="sum-row"><span>Revenue</span><b class="pos">+$${stats.revenue}</b></div>
+      <div class="sum-row"><span>Daily goal ($${goal})</span><b class="${goalMet ? "pos" : "neg"}">${goalMet ? `met +$${bonus}` : "missed"}</b></div>
       <div class="sum-row"><span>Stock & upgrades</span><b class="neg">−$${stats.spent}</b></div>
       <div class="sum-row"><span>Rent</span><b class="neg">−$${rent}</b></div>
       <div class="sum-row total"><span>Net</span><b class="${net >= 0 ? "pos" : "neg"}">${net >= 0 ? "+" : "−"}$${Math.abs(net)}</b></div>

@@ -31,10 +31,15 @@
   <div id="hud-top">
     <div class="hud-pill" id="hud-cash">$0</div>
     <div class="hud-pill">📅 Day <span id="hud-day">1</span> · <span id="hud-clock">9:00</span></div>
+    <div class="hud-pill goal-pill" id="hud-goal-pill" title="Daily revenue goal">
+      🎯 $<span id="hud-rev">0</span>/$<span id="hud-goal">0</span>
+      <div class="goal-track"><div id="goal-fill"></div></div>
+    </div>
     <div class="hud-pill level-pill">
       Lv <span id="hud-level">1</span>
       <div class="xp-track"><div id="xp-fill"></div></div>
     </div>
+    <button id="btn-audio" class="hud-pill hud-btn" title="Toggle ambient sound">🔊</button>
     <button id="btn-tablet" class="hud-pill hud-btn">📱 Tablet</button>
   </div>
 

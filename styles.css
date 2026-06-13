@@ -79,6 +79,17 @@ body.touch #touch-area { pointer-events: auto; }
 }
 #xp-fill { height: 100%; width: 0; background: var(--accent); transition: width 0.4s; }
 
+.goal-pill { gap: 7px; }
+.goal-pill.met { color: var(--good); }
+.goal-track {
+  width: 56px; height: 6px;
+  background: rgba(0, 0, 0, 0.4);
+  border-radius: 4px;
+  overflow: hidden;
+}
+#goal-fill { height: 100%; width: 0; background: var(--accent); transition: width 0.4s; }
+.goal-pill.met #goal-fill { background: var(--good); }
+
 #crosshair {
   position: fixed;
   left: 50%; top: 50%;
