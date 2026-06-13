@@ -684,7 +684,179 @@ function buildFishMesh(sp, scale = 1) {
 
 /* ---------------- Fish tank unit (two-tier glowing rack) ---------------- */
 
-const CORAL_COLORS = [0xff6b6b, 0xf3722c, 0xf9c74f, 0xc77dff, 0x4ecdc4];
+/* ---------------- Coral library ---------------- */
+
+const CORAL_PALETTE = [
+  0xff6b6b, 0xff7b54, 0xffa62b, 0xf9c74f, 0xf15bb5,
+  0xc77dff, 0x9b5de5, 0x00bbf9, 0x00f5d4, 0x4ecdc4, 0xff4d6d,
+];
+
+// emissive coral material so reefs glow under the tank light
+function coralMat(color, emiss = 0.3) {
+  const m = new THREE.MeshLambertMaterial({ color });
+  m.emissive = new THREE.Color(color).multiplyScalar(emiss);
+  return m;
+}
+const _UP = new THREE.Vector3(0, 1, 0);
+function cylBetween(a, b, r0, r1, material, seg = 6) {
+  const dir = b.clone().sub(a);
+  const len = dir.length();
+  const m = new THREE.Mesh(new THREE.CylinderGeometry(r1, r0, len, seg), material);
+  m.position.copy(a).addScaledVector(dir, 0.5);
+  m.quaternion.setFromUnitVectors(_UP, dir.clone().normalize());
+  return m;
+}
+
+// Branching staghorn / antler coral
+function buildStaghorn(color, rand) {
+  const g = new THREE.Group();
+  const stalk = coralMat(color, 0.26);
+  const tipHex = new THREE.Color(color).lerp(new THREE.Color(0xffffff), 0.55).getHex();
+  const tipMat = coralMat(tipHex, 0.42);
+  const grow = (base, dir, len, rad, depth) => {
+    const end = base.clone().addScaledVector(dir, len);
+    g.add(cylBetween(base, end, rad, rad * 0.7, depth <= 1 ? tipMat : stalk));
+    if (depth <= 0) {
+      const knob = new THREE.Mesh(new THREE.SphereGeometry(rad * 0.9, 6, 5), tipMat);
+      knob.position.copy(end); g.add(knob); return;
+    }
+    const n = 2 + Math.floor(rand() * 2);
+    for (let i = 0; i < n; i++) {
+      const nd = dir.clone();
+      nd.x += (rand() - 0.5) * 1.2; nd.z += (rand() - 0.5) * 1.2; nd.y += rand() * 0.35;
+      grow(end, nd.normalize(), len * (0.68 + rand() * 0.16), rad * 0.72, depth - 1);
+    }
+  };
+  const start = new THREE.Vector3((rand() - 0.5) * 0.2, 1, (rand() - 0.5) * 0.2).normalize();
+  grow(new THREE.Vector3(0, 0, 0), start, 0.1 + rand() * 0.04, 0.022, 3);
+  return g;
+}
+
+// Brain coral — ridged dome
+const brainTexCache = new Map();
+function brainTexture(color) {
+  if (brainTexCache.has(color)) return brainTexCache.get(color);
+  const tex = canvasTexture((ctx, w, h) => {
+    ctx.fillStyle = cssOf(color); ctx.fillRect(0, 0, w, h);
+    ctx.lineCap = "round";
+    const R = seededRand(color + 1);
+    ctx.strokeStyle = darkenCss(color, 0.45); ctx.lineWidth = w * 0.05;
+    for (let l = 0; l < 11; l++) {
+      ctx.beginPath();
+      let x = R() * w, y = R() * h; ctx.moveTo(x, y);
+      for (let s = 0; s < 7; s++) { x += (R() - 0.5) * w * 0.45; y += (R() - 0.5) * h * 0.45; ctx.lineTo(x, y); }
+      ctx.stroke();
+    }
+    ctx.strokeStyle = lightenCss(color, 0.35); ctx.lineWidth = w * 0.022;
+    for (let l = 0; l < 7; l++) {
+      ctx.beginPath();
+      let x = R() * w, y = R() * h; ctx.moveTo(x, y);
+      for (let s = 0; s < 6; s++) { x += (R() - 0.5) * w * 0.35; y += (R() - 0.5) * h * 0.35; ctx.lineTo(x, y); }
+      ctx.stroke();
+    }
+  }, 64, 64);
+  brainTexCache.set(color, tex);
+  return tex;
+}
+function buildBrain(color) {
+  const g = new THREE.Group();
+  const m = new THREE.MeshLambertMaterial({ map: brainTexture(color) });
+  m.emissive = new THREE.Color(color).multiplyScalar(0.14);
+  const dome = new THREE.Mesh(new THREE.SphereGeometry(0.11, 18, 12, 0, Math.PI * 2, 0, Math.PI * 0.55), m);
+  dome.scale.set(1.15, 0.78, 1.15);
+  g.add(dome);
+  return g;
+}
+
+// Sea fan / gorgonian — lacy alpha-textured fan on crossed planes
+const fanTexCache = new Map();
+function fanTexture(color) {
+  if (fanTexCache.has(color)) return fanTexCache.get(color);
+  const tex = canvasTexture((ctx, w, h) => {
+    ctx.clearRect(0, 0, w, h);
+    ctx.strokeStyle = cssOf(color); ctx.lineCap = "round";
+    const R = seededRand(color + 7);
+    const branch = (x, y, ang, len, wd, depth) => {
+      if (depth < 0 || len < 2.5) return;
+      const nx = x + Math.cos(ang) * len, ny = y + Math.sin(ang) * len;
+      ctx.lineWidth = wd; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(nx, ny); ctx.stroke();
+      branch(nx, ny, ang - 0.32 - R() * 0.1, len * 0.82, wd * 0.72, depth - 1);
+      branch(nx, ny, ang + 0.32 + R() * 0.1, len * 0.82, wd * 0.72, depth - 1);
+      if (R() > 0.4) branch(nx, ny, ang + (R() - 0.5) * 0.15, len * 0.86, wd * 0.78, depth - 1);
+    };
+    branch(w * 0.5, h * 0.97, -Math.PI / 2, h * 0.27, w * 0.07, 5);
+  }, 72, 88);
+  fanTexCache.set(color, tex);
+  return tex;
+}
+function buildFan(color, rand) {
+  const m = new THREE.MeshLambertMaterial({
+    map: fanTexture(color), transparent: true, alphaTest: 0.4, side: THREE.DoubleSide,
+  });
+  m.emissive = new THREE.Color(color).multiplyScalar(0.22);
+  const g = new THREE.Group();
+  const w = 0.3, h = 0.34;
+  const p = new THREE.Mesh(new THREE.PlaneGeometry(w, h), m); p.position.y = h / 2;
+  const p2 = p.clone(); p2.rotation.y = Math.PI / 2.4;
+  g.add(p, p2);
+  g.rotation.y = rand() * Math.PI;
+  return g;
+}
+
+// Organ-pipe / tube coral
+function buildTube(color, rand) {
+  const g = new THREE.Group();
+  const m = coralMat(color, 0.32);
+  const mouth = coralMat(0x1a1a1a, 0);
+  const n = 5 + Math.floor(rand() * 5);
+  for (let i = 0; i < n; i++) {
+    const hh = 0.06 + rand() * 0.13;
+    const x = (rand() - 0.5) * 0.13, z = (rand() - 0.5) * 0.11;
+    const t = new THREE.Mesh(new THREE.CylinderGeometry(0.016, 0.019, hh, 8), m);
+    t.position.set(x, hh / 2, z); g.add(t);
+    const rim = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.006, 8), mouth);
+    rim.position.set(x, hh, z); g.add(rim);
+  }
+  return g;
+}
+
+// Sea anemone — swaying tentacles around a disc; pushes to `swayers`
+function buildAnemone(color, rand, swayers) {
+  const g = new THREE.Group();
+  const disc = new THREE.Mesh(new THREE.SphereGeometry(0.05, 12, 8), coralMat(color, 0.25));
+  disc.scale.y = 0.6; disc.position.y = 0.025; g.add(disc);
+  const tipHex = new THREE.Color(color).lerp(new THREE.Color(0xffffff), 0.6).getHex();
+  const tcount = 16 + Math.floor(rand() * 8);
+  for (let i = 0; i < tcount; i++) {
+    const a = (i / tcount) * Math.PI * 2;
+    const rr = 0.018 + rand() * 0.03;
+    const hh = 0.06 + rand() * 0.06;
+    const t = new THREE.Mesh(new THREE.CylinderGeometry(0.004, 0.009, hh, 5), coralMat(color, 0.32));
+    t.position.set(Math.cos(a) * rr, 0.03 + hh / 2, Math.sin(a) * rr);
+    const baseZ = -Math.cos(a) * 0.55, baseX = Math.sin(a) * 0.55;
+    t.rotation.z = baseZ; t.rotation.x = baseX;
+    const tip = new THREE.Mesh(new THREE.SphereGeometry(0.007, 6, 5), coralMat(tipHex, 0.5));
+    tip.position.y = hh / 2; t.add(tip);
+    g.add(t);
+    swayers.push({ mesh: t, phase: rand() * 6, baseZ, baseX, amp: 0.12 + rand() * 0.12 });
+  }
+  return g;
+}
+
+// Bubble / grape coral — pearly cluster
+function buildBubble(color, rand) {
+  const g = new THREE.Group();
+  const m = coralMat(color, 0.2);
+  const n = 6 + Math.floor(rand() * 5);
+  for (let i = 0; i < n; i++) {
+    const rr = 0.02 + rand() * 0.03;
+    const s = new THREE.Mesh(new THREE.SphereGeometry(rr, 8, 6), m);
+    s.position.set((rand() - 0.5) * 0.14, rr, (rand() - 0.5) * 0.12);
+    g.add(s);
+  }
+  return g;
+}
+
 const MAIN_Y = 0.8;           // main tank base height
 const MAIN_H = 0.95;          // main tank height
 const DECO_Y = MAIN_Y + MAIN_H + 0.09; // upper display tank base
@@ -769,45 +941,59 @@ export class TankUnit {
   addDecorations() {
     const r = seededRand(this.slotIndex + 7);
     const floorY = MAIN_Y + 0.1;
-    // coral clusters
-    const nCoral = 1 + Math.floor(r() * 2);
-    for (let c = 0; c < nCoral; c++) {
-      const cluster = new THREE.Group();
-      const color = CORAL_COLORS[Math.floor(r() * CORAL_COLORS.length)];
-      const branches = 3 + Math.floor(r() * 3);
-      for (let b = 0; b < branches; b++) {
-        const branch = new THREE.Mesh(
-          new THREE.ConeGeometry(0.018 + r() * 0.015, 0.1 + r() * 0.12, 5), mat(color));
-        branch.position.set((r() - 0.5) * 0.12, 0.06 + r() * 0.05, (r() - 0.5) * 0.1);
-        branch.rotation.z = (r() - 0.5) * 0.9;
-        branch.rotation.x = (r() - 0.5) * 0.5;
-        cluster.add(branch);
-      }
-      cluster.position.set(-0.7 + r() * 1.4, floorY, (r() - 0.5) * 0.34);
-      this.group.add(cluster);
+    this.swayers = [];
+
+    // A reef garden of distinct coral pieces spread across the tank floor.
+    const builders = [
+      (c) => buildStaghorn(c, r),
+      (c) => buildBrain(c),
+      (c) => buildFan(c, r),
+      (c) => buildTube(c, r),
+      (c) => buildAnemone(c, r, this.swayers),
+      (c) => buildBubble(c, r),
+    ];
+    const n = 3 + Math.floor(r() * 2);
+    const used = [];
+    for (let i = 0; i < n; i++) {
+      // avoid repeating the same coral type twice in a row
+      let bi; do { bi = Math.floor(r() * builders.length); } while (used.length && used[used.length - 1] === bi && r() < 0.7);
+      used.push(bi);
+      const color = CORAL_PALETTE[Math.floor(r() * CORAL_PALETTE.length)];
+      const piece = builders[bi](color);
+      piece.scale.setScalar(0.8 + r() * 0.6);
+      const x = -0.74 + (i + 0.2 + r() * 0.5) * (1.48 / n);
+      piece.position.set(x, floorY, (r() - 0.5) * 0.34);
+      this.group.add(piece);
     }
-    // seaweed strands
+
+    // a rock or two as a base
+    for (let p = 0; p < 2 + Math.floor(r() * 2); p++) {
+      const peb = new THREE.Mesh(new THREE.SphereGeometry(0.03 + r() * 0.035, 6, 5),
+        mat(p % 2 ? 0x8d99ae : 0xadb5bd));
+      peb.position.set(-0.7 + r() * 1.4, floorY + 0.01, (r() - 0.5) * 0.38);
+      peb.scale.y = 0.55;
+      this.group.add(peb);
+    }
+
+    // seaweed strands for greenery
     const nWeed = 2 + Math.floor(r() * 3);
     for (let w = 0; w < nWeed; w++) {
       const x = -0.75 + r() * 1.5, z = (r() - 0.5) * 0.36;
       const h = 0.3 + r() * 0.4;
-      const weed = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.02, h, 5), mat(0x52b788));
+      const weed = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.02, h, 5), coralMat(0x52b788, 0.12));
       weed.position.set(x, floorY + h / 2, z);
       weed.rotation.z = (r() - 0.5) * 0.3;
       this.group.add(weed);
     }
-    // pebbles
-    for (let p = 0; p < 4; p++) {
-      const peb = new THREE.Mesh(new THREE.SphereGeometry(0.025 + r() * 0.025, 6, 5),
-        mat(p % 2 ? 0x8d99ae : 0xadb5bd));
-      peb.position.set(-0.7 + r() * 1.4, floorY, (r() - 0.5) * 0.38);
-      peb.scale.y = 0.6;
-      this.group.add(peb);
-    }
-    // plants in the upper display tank too
-    for (let w = 0; w < 3; w++) {
-      const h = 0.18 + r() * 0.18;
-      const weed = new THREE.Mesh(new THREE.CylinderGeometry(0.01, 0.018, h, 5), mat(0x74c69d));
+
+    // small coral + plants in the upper display tank too
+    for (let w = 0; w < 2; w++) {
+      const small = buildStaghorn(CORAL_PALETTE[Math.floor(r() * CORAL_PALETTE.length)], r);
+      small.scale.setScalar(0.5 + r() * 0.2);
+      small.position.set(-0.6 + r() * 1.2, DECO_Y + 0.04, (r() - 0.5) * 0.28);
+      this.group.add(small);
+      const h = 0.16 + r() * 0.16;
+      const weed = new THREE.Mesh(new THREE.CylinderGeometry(0.009, 0.016, h, 5), coralMat(0x74c69d, 0.12));
       weed.position.set(-0.75 + r() * 1.5, DECO_Y + 0.04 + h / 2, (r() - 0.5) * 0.3);
       this.group.add(weed);
     }
@@ -904,6 +1090,12 @@ export class TankUnit {
       b.position.y += b.userData.speed * dt;
       b.position.x += Math.sin(this.time * 3 + b.userData.wob) * 0.01 * dt * 60;
       if (b.position.y > MAIN_Y + MAIN_H - 0.12) b.position.y = MAIN_Y + 0.15;
+    }
+    if (this.swayers) {
+      for (const s of this.swayers) {
+        s.mesh.rotation.z = s.baseZ + Math.sin(this.time * 2 + s.phase) * s.amp;
+        s.mesh.rotation.x = s.baseX + Math.cos(this.time * 1.7 + s.phase) * s.amp * 0.7;
+      }
     }
   }
 }
