@@ -181,6 +181,20 @@ function init() {
   }
   game.scene.add(sun);
 
+  // Aquarium accent lighting: cool blue glow washing the tank wall, and warm
+  // pools over the checkout / supplies side for a reef-shop ambiance.
+  for (const z of [-4.5, -0.5, 3.5]) {
+    const aqua = new THREE.PointLight(0x4fd0ff, 0.55, 7, 1.6);
+    aqua.position.set(-7.6, 1.7, z);
+    game.scene.add(aqua);
+  }
+  const warm = new THREE.PointLight(0xffd9a0, 0.5, 9, 1.5);
+  warm.position.set(4, 2.6, 4);
+  game.scene.add(warm);
+  const supply = new THREE.PointLight(0xfff0d8, 0.4, 9, 1.5);
+  supply.position.set(7.5, 2.6, -2);
+  game.scene.add(supply);
+
   buildRoom(game.scene, game.colliders);
 
   game.sound = new Sound();
