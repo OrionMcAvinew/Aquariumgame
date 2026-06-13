@@ -28,6 +28,13 @@ button { font: inherit; cursor: pointer; }
 
 #game { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
 
+/* subtle depth vignette over the 3D view */
+#vignette {
+  position: fixed; inset: 0; z-index: 3;
+  pointer-events: none;
+  background: radial-gradient(ellipse at center, transparent 55%, rgba(2, 12, 20, 0.38) 100%);
+}
+
 #touch-area {
   position: fixed; inset: 0;
   z-index: 5;

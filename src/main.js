@@ -171,8 +171,10 @@ function init() {
   game.renderer.shadowMap.enabled = !isTouch;
 
   // Lights
-  game.scene.add(new THREE.HemisphereLight(0xfff6e8, 0x9aa5a0, 1.25));
+  game.hemi = new THREE.HemisphereLight(0xfff6e8, 0x9aa5a0, 1.25);
+  game.scene.add(game.hemi);
   const sun = new THREE.DirectionalLight(0xfff2d8, 1.3);
+  game.sun = sun;
   sun.position.set(6, 10, 4);
   if (!isTouch) {
     sun.castShadow = true;
@@ -242,6 +244,19 @@ function loop(now) {
   if (!game.paused) {
     s.time += dt;
     if (s.time >= DAY_LEN) endDay();
+
+    // time-of-day lighting: midday is bright/cool, late afternoon warms to a
+    // dim orange dusk so the lit tanks glow.
+    const dayT = s.time / DAY_LEN;
+    const warm = Math.max(0, (dayT - 0.5) / 0.5);          // 0 until midday -> 1 at close
+    const dusk = Math.max(0, (dayT - 0.85) / 0.15);        // final darkening
+    const sky = new THREE.Color(0x9ed4e8).lerp(new THREE.Color(0xf4a05a), warm * 0.85);
+    sky.lerp(new THREE.Color(0x223a52), dusk * 0.6);
+    game.scene.background.copy(sky);
+    game.scene.fog.color.copy(sky);
+    game.sun.intensity = 1.3 - warm * 0.55;
+    game.sun.color.setHex(0xfff2d8).lerp(new THREE.Color(0xff9d5c), warm);
+    game.hemi.intensity = 1.25 - warm * 0.4 - dusk * 0.15;
 
     // deliveries
     for (let i = s.orders.length - 1; i >= 0; i--) {

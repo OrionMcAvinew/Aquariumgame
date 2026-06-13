@@ -1,6 +1,6 @@
 // Simple offline-first service worker for Fin & Fortune.
 // Bump CACHE when shipping new assets so clients refresh.
-const CACHE = "finfortune-v1";
+const CACHE = "finfortune-v2";
 const ASSETS = [
   "./",
   "./index.html",
