@@ -36,7 +36,7 @@ You walk the shop floor in first person and do everything yourself:
 3. **🧽 Keep tanks healthy** — water gets murkier over time, and customers won't buy fish from a dirty tank. Look at a tank with empty hands to feed & clean it.
 4. **💳 Work the register** — customers walk in, browse, grab what they want, and queue at the counter. Stand behind it, scan every item, and take payment before their patience runs out.
 5. **🏷️ Set your prices** — every product has a market price. Mark up too greedily and customers walk straight back out.
-6. **📈 Level up** — every $1 of revenue is 1 XP. Levels unlock rarer fish (19 species, from guppies up to koi, lionfish, seahorses and a premium arowana), new products (16 supply lines including heaters, LED lights, test kits, conditioner and coral), and bring in more customers. Expand with extra tanks and shelves from the Tablet.
+6. **📈 Level up** — every $1 of revenue is 1 XP. Levels unlock rarer fish (25 species, from guppies up to blue tangs, mandarins, koi, seahorses and a premium arowana), new products (21 supply lines including heaters, LED lights, test kits, medicine, castle ornaments and coral), and bring in more customers. Expand with extra tanks and shelves from the Tablet.
 7. **🌙 Survive the rent** — each day ends with a profit/loss summary, and rent scales with how much store you own.
 
 Progress autosaves to your browser (localStorage).

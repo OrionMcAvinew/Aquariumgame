@@ -347,6 +347,12 @@ const SPRITE_MAP = {
   lionfish:  { base: "fish_red",    tint: 0x9b2226 },
   koi:       { base: "fish_orange", tint: 0xf2a65a },
   arowana:   { base: "fish_grey_long_a" },
+  platy:     { base: "fish_orange", tint: 0xff5a36 },
+  rasbora:   { base: "fish_grey",   tint: 0xd98c5f },
+  pleco:     { base: "fish_grey_long_b", tint: 0x5a4632 },
+  parrot:    { base: "fish_pink",   tint: 0xff4d4d },
+  bluetang:  { base: "fish_blue",   tint: 0x1976d2 },
+  mandarin:  { base: "fish_green",  tint: 0x0a9396 },
   // seahorse intentionally absent -> renders with the procedural painter
 };
 
@@ -857,6 +863,116 @@ function buildBubble(color, rand) {
   return g;
 }
 
+// Mushroom / leather coral — flat radial cap on a stalk
+function buildMushroom(color, rand) {
+  const g = new THREE.Group();
+  const stalk = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.045, 0.05, 8), coralMat(0xd8c3a5, 0.1));
+  stalk.position.y = 0.025; g.add(stalk);
+  const cap = new THREE.Mesh(new THREE.SphereGeometry(0.1, 16, 8, 0, Math.PI * 2, 0, Math.PI * 0.5), coralMat(color, 0.28));
+  cap.scale.set(1.25, 0.45, 1.25); cap.position.y = 0.06; g.add(cap);
+  const ridgeHex = new THREE.Color(color).lerp(new THREE.Color(0xffffff), 0.3).getHex();
+  const ridge = coralMat(ridgeHex, 0.3);
+  const rings = 6 + Math.floor(rand() * 4);
+  for (let i = 0; i < rings; i++) {
+    const a = (i / rings) * Math.PI * 2;
+    const r = new THREE.Mesh(new THREE.BoxGeometry(0.004, 0.006, 0.11), ridge);
+    r.position.set(Math.cos(a) * 0.055, 0.088, Math.sin(a) * 0.055);
+    r.rotation.y = a; g.add(r);
+  }
+  return g;
+}
+
+// Pillar / finger coral — vertical rounded fingers
+function buildPillar(color, rand) {
+  const g = new THREE.Group();
+  const m = coralMat(color, 0.3);
+  const n = 3 + Math.floor(rand() * 3);
+  for (let i = 0; i < n; i++) {
+    const h = 0.12 + rand() * 0.16;
+    const x = (rand() - 0.5) * 0.14, z = (rand() - 0.5) * 0.11;
+    const f = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.03, h, 7), m);
+    f.position.set(x, h / 2, z); g.add(f);
+    const tip = new THREE.Mesh(new THREE.SphereGeometry(0.024, 7, 6), m);
+    tip.position.set(x, h, z); g.add(tip);
+  }
+  return g;
+}
+
+// Giant clam — ridged shells with a bright wavy mantle
+function buildClam(color) {
+  const g = new THREE.Group();
+  const shell = coralMat(0xeae0cf, 0.08);
+  const bottom = new THREE.Mesh(new THREE.SphereGeometry(0.1, 16, 8, 0, Math.PI * 2, 0, Math.PI * 0.5), shell);
+  bottom.scale.set(1.3, 0.55, 1); bottom.rotation.x = Math.PI; bottom.position.y = 0.06; g.add(bottom);
+  const top = new THREE.Mesh(new THREE.SphereGeometry(0.1, 16, 8, 0, Math.PI * 2, 0, Math.PI * 0.5), shell);
+  top.scale.set(1.3, 0.55, 1); top.rotation.x = -0.6; top.position.set(0, 0.07, -0.02); g.add(top);
+  const mantle = new THREE.Mesh(new THREE.TorusGeometry(0.07, 0.022, 8, 18, Math.PI), coralMat(color, 0.45));
+  mantle.rotation.x = Math.PI / 2 + 0.25; mantle.position.set(0, 0.07, 0.04); g.add(mantle);
+  return g;
+}
+
+// Starfish lying on the substrate
+function buildStarfish(color) {
+  const g = new THREE.Group();
+  const m = coralMat(color, 0.3);
+  for (let i = 0; i < 5; i++) {
+    const a = (i / 5) * Math.PI * 2;
+    const arm = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.022, 0.05), m);
+    arm.position.set(Math.cos(a) * 0.05, 0.014, Math.sin(a) * 0.05);
+    arm.rotation.y = -a; g.add(arm);
+    const tip = new THREE.Mesh(new THREE.SphereGeometry(0.016, 6, 5), m);
+    tip.position.set(Math.cos(a) * 0.11, 0.014, Math.sin(a) * 0.11); g.add(tip);
+  }
+  const c = new THREE.Mesh(new THREE.SphereGeometry(0.035, 10, 8), m);
+  c.scale.y = 0.5; c.position.y = 0.016; g.add(c);
+  return g;
+}
+
+// Sea urchin — dark body bristling with spikes
+function buildUrchin(color) {
+  const g = new THREE.Group();
+  const body = new THREE.Mesh(new THREE.SphereGeometry(0.055, 12, 10), coralMat(color, 0.15));
+  body.position.y = 0.05; g.add(body);
+  const spikeHex = new THREE.Color(color).lerp(new THREE.Color(0x000000), 0.25).getHex();
+  const spikeM = coralMat(spikeHex, 0.1);
+  for (let i = 0; i < 28; i++) {
+    const u = Math.random(), v = Math.random();
+    const th = Math.acos(2 * u - 1), ph = 2 * Math.PI * v;
+    const dir = new THREE.Vector3(Math.sin(th) * Math.cos(ph), Math.cos(th), Math.sin(th) * Math.sin(ph));
+    if (dir.y < -0.3) continue;
+    const len = 0.05 + Math.random() * 0.045;
+    const sp = new THREE.Mesh(new THREE.ConeGeometry(0.006, len, 4), spikeM);
+    const base = dir.clone().multiplyScalar(0.055).add(new THREE.Vector3(0, 0.05, 0));
+    sp.position.copy(base.addScaledVector(dir, len * 0.5));
+    sp.quaternion.setFromUnitVectors(_UP, dir);
+    g.add(sp);
+  }
+  return g;
+}
+
+// soft tileable caustic light texture (cached), cloned per tank for offset
+let _causticBase = null;
+function makeCausticTexture() {
+  if (!_causticBase) {
+    const c = document.createElement("canvas");
+    c.width = 128; c.height = 128;
+    const x = c.getContext("2d");
+    x.clearRect(0, 0, 128, 128);
+    for (let i = 0; i < 18; i++) {
+      const px = Math.random() * 128, py = Math.random() * 128, r = 10 + Math.random() * 22;
+      const g = x.createRadialGradient(px, py, 0, px, py, r);
+      g.addColorStop(0, "rgba(255,255,255,0.5)");
+      g.addColorStop(1, "rgba(255,255,255,0)");
+      x.fillStyle = g; x.beginPath(); x.arc(px, py, r, 0, Math.PI * 2); x.fill();
+    }
+    _causticBase = c;
+  }
+  const t = new THREE.CanvasTexture(_causticBase);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.repeat.set(2, 1.2);
+  return t;
+}
+
 const MAIN_Y = 0.8;           // main tank base height
 const MAIN_H = 0.95;          // main tank height
 const DECO_Y = MAIN_Y + MAIN_H + 0.09; // upper display tank base
@@ -927,6 +1043,8 @@ export class TankUnit {
 
     this.addDecorations();
     this.addBubbles();
+    this.addCaustics();
+    this.addFloaties();
     this.addAmbientFish();
     scene.add(this.group);
 
@@ -951,6 +1069,8 @@ export class TankUnit {
       (c) => buildTube(c, r),
       (c) => buildAnemone(c, r, this.swayers),
       (c) => buildBubble(c, r),
+      (c) => buildMushroom(c, r),
+      (c) => buildPillar(c, r),
     ];
     const n = 3 + Math.floor(r() * 2);
     const used = [];
@@ -964,6 +1084,18 @@ export class TankUnit {
       const x = -0.74 + (i + 0.2 + r() * 0.5) * (1.48 / n);
       piece.position.set(x, floorY, (r() - 0.5) * 0.34);
       this.group.add(piece);
+    }
+
+    // ground creatures — a clam, starfish, or urchin or two
+    const creatures = [(c) => buildClam(c), (c) => buildStarfish(c), (c) => buildUrchin(c)];
+    const cn = Math.floor(r() * 2.4);
+    for (let i = 0; i < cn; i++) {
+      const color = CORAL_PALETTE[Math.floor(r() * CORAL_PALETTE.length)];
+      const cr = creatures[Math.floor(r() * creatures.length)](color);
+      cr.scale.setScalar(0.8 + r() * 0.5);
+      cr.position.set(-0.7 + r() * 1.4, floorY, (r() - 0.5) * 0.4);
+      cr.rotation.y = r() * Math.PI * 2;
+      this.group.add(cr);
     }
 
     // a rock or two as a base
@@ -1011,6 +1143,33 @@ export class TankUnit {
       b.userData.wob = r() * 6;
       this.group.add(b);
       this.bubbles.push(b);
+    }
+  }
+
+  // moving light caustics rippling across the substrate
+  addCaustics() {
+    this.causticTex = makeCausticTexture();
+    const mat0 = new THREE.MeshBasicMaterial({
+      map: this.causticTex, transparent: true, opacity: 0.2,
+      blending: THREE.AdditiveBlending, depthWrite: false,
+    });
+    const c = new THREE.Mesh(new THREE.PlaneGeometry(1.8, 0.58), mat0);
+    c.rotation.x = -Math.PI / 2;
+    c.position.set(0, MAIN_Y + 0.14, 0);
+    this.group.add(c);
+  }
+
+  // slow drifting motes for underwater depth
+  addFloaties() {
+    this.floaties = [];
+    const fm = new THREE.MeshBasicMaterial({ color: 0xeaf6ff, transparent: true, opacity: 0.22 });
+    for (let i = 0; i < 7; i++) {
+      const s = new THREE.Mesh(new THREE.SphereGeometry(0.006, 5, 4), fm);
+      s.position.set((Math.random() - 0.5) * 1.6, MAIN_Y + 0.2 + Math.random() * 0.6, (Math.random() - 0.5) * 0.4);
+      s.userData.vx = (Math.random() - 0.5) * 0.012;
+      s.userData.vy = (Math.random() - 0.5) * 0.008;
+      this.group.add(s);
+      this.floaties.push(s);
     }
   }
 
@@ -1097,6 +1256,19 @@ export class TankUnit {
         s.mesh.rotation.x = s.baseX + Math.cos(this.time * 1.7 + s.phase) * s.amp * 0.7;
       }
     }
+    if (this.causticTex) {
+      this.causticTex.offset.x = this.time * 0.02;
+      this.causticTex.offset.y = Math.sin(this.time * 0.3) * 0.1;
+    }
+    if (this.floaties) {
+      for (const f of this.floaties) {
+        f.position.x += f.userData.vx * dt;
+        f.position.y += f.userData.vy * dt;
+        if (f.position.x < -0.85) f.position.x = 0.85; else if (f.position.x > 0.85) f.position.x = -0.85;
+        if (f.position.y < MAIN_Y + 0.15) f.position.y = MAIN_Y + MAIN_H - 0.15;
+        else if (f.position.y > MAIN_Y + MAIN_H - 0.15) f.position.y = MAIN_Y + 0.15;
+      }
+    }
   }
 }
 
@@ -1175,6 +1347,18 @@ function productMesh(prod) {
     const stand = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.18, 0.08), mat(0x495057));
     stand.position.y = 0.09;
     g.add(bar, endA, endB, stand);
+  } else if (shape === "castle") {
+    const stone = mat(prod.color);
+    const keep = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.22, 0.18), stone);
+    keep.position.y = 0.11; g.add(keep);
+    for (const sx of [-0.11, 0.11]) {
+      const turret = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.055, 0.3, 8), stone);
+      turret.position.set(sx, 0.15, 0); g.add(turret);
+      const roof = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.08, 8), mat(0xc1121f));
+      roof.position.set(sx, 0.34, 0); g.add(roof);
+    }
+    const door = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.1, 0.02), mat(0x2b2118));
+    door.position.set(0, 0.06, 0.095); g.add(door);
   } else if (shape === "wood") {
     const r = seededRand(prod.id.length * 17 + 3);
     const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.07, 0.3, 6), body);
