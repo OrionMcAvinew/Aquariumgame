@@ -104,6 +104,9 @@ class Customer {
         this.cart.push({ id: t.id, label: item(t.id).name, price, scanned: false });
       }
     }
+    if (this.cart.length > 0 && this.mesh.userData.basket) {
+      this.mesh.userData.basket.visible = true;
+    }
     this.nextWant();
   }
 

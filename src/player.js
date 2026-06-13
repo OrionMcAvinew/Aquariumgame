@@ -127,10 +127,15 @@ export class Player {
         this.pos.x += (mx * cos + mz * sin) * speed * dt;
         this.pos.z += (mz * cos - mx * sin) * speed * dt;
         this.resolveCollisions();
+        this.bobPhase = (this.bobPhase || 0) + dt * speed * 2.2;
+        this.bob = Math.sin(this.bobPhase) * 0.028;
+      } else {
+        this.bob = (this.bob || 0) * Math.max(0, 1 - dt * 8);
       }
     }
 
     this.camera.position.copy(this.pos);
+    this.camera.position.y += this.bob || 0;
     this.camera.rotation.set(this.pitch, this.yaw, 0, "YXZ");
 
     if (this.carry) {

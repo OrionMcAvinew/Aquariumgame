@@ -51,7 +51,7 @@ export const MAX_LEVEL = 9;
 export const tankPrice = (owned) => Math.round(120 * Math.pow(1.5, owned - 2));
 export const shelfPrice = (owned) => Math.round(80 * Math.pow(1.5, owned - 1));
 export const MAX_TANK_SLOTS = 8;
-export const MAX_SHELF_SLOTS = 6;
+export const MAX_SHELF_SLOTS = 8;
 
 // ---- Store layout (meters; x: -10..10 west->east, z: -7..7 north->south) ----
 // Door is centered on the south wall (z = +7).
@@ -77,13 +77,19 @@ export const SHELF_SLOTS = [
   { x: 9.1, z: 1.2,  rotY: -Math.PI / 2 },
   { x: 3.6, z: -6.4, rotY: 0 },
   { x: 6.2, z: -6.4, rotY: 0 },
+  // back-to-back center gondolas
+  { x: -5.0, z: 3.1, rotY: 0 },
+  { x: -5.0, z: 2.4, rotY: Math.PI },
 ];
 
 // Browse spots (where a customer stands to look at a unit).
 export const tankBrowseSpot = (s) =>
   s.rotY === 0 ? { x: s.x, z: s.z + 1.3 } : { x: s.x + 1.4, z: s.z };
-export const shelfBrowseSpot = (s) =>
-  s.rotY === 0 ? { x: s.x, z: s.z + 1.3 } : { x: s.x - 1.4, z: s.z };
+export const shelfBrowseSpot = (s) => {
+  if (s.rotY === 0) return { x: s.x, z: s.z + 1.3 };
+  if (s.rotY === Math.PI) return { x: s.x, z: s.z - 1.3 };
+  return { x: s.x - 1.4, z: s.z };
+};
 
 export const COUNTER = { x: 3.3, z: 5.0, w: 2.6, d: 0.9, h: 1.02 };
 export const REGISTER_ZONE = { x: 3.3, z: 6.1, r: 1.5 };  // player stands here to serve

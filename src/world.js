@@ -638,7 +638,8 @@ export class ShelfUnit {
     scene.add(this.group);
 
     const cx = slot.x, cz = slot.z;
-    const hw = slot.rotY === 0 ? 0.98 : 0.3, hd = slot.rotY === 0 ? 0.3 : 0.98;
+    const horiz = Math.abs(Math.cos(slot.rotY)) > 0.5; // faces north/south
+    const hw = horiz ? 0.98 : 0.3, hd = horiz ? 0.3 : 0.98;
     colliders.push({ minX: cx - hw, maxX: cx + hw, minZ: cz - hd, maxZ: cz + hd });
 
     this.stockMeshes = [];
@@ -716,6 +717,16 @@ export function createCustomerMesh() {
   hair.position.y = 1.52;
   const legs = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.18, 0.5, 8), mat(0x33415c));
   legs.position.y = 0.25;
-  g.add(body, head, hair, legs);
+  // shopping basket, shown once they're carrying something
+  const basket = new THREE.Group();
+  const tub = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.16, 0.2),
+    mat(Math.random() < 0.5 ? 0xc1121f : 0x2a6f97));
+  const handle = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.03, 0.03), mat(0x343a40));
+  handle.position.y = 0.13;
+  basket.add(tub, handle);
+  basket.position.set(0.32, 0.72, 0);
+  basket.visible = false;
+  g.add(body, head, hair, legs, basket);
+  g.userData.basket = basket;
   return g;
 }
