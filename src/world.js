@@ -10,6 +10,12 @@ const mat = (color, opts = {}) => new THREE.MeshLambertMaterial({ color, ...opts
 const NAVY = 0x1d3557;
 const TRIM = 0xf4f1ea;
 
+// canvas colour helpers (operate on 0xRRGGBB ints)
+const rgbOf = (c) => [(c >> 16) & 255, (c >> 8) & 255, c & 255];
+const cssOf = (c, a = 1) => { const [r, g, b] = rgbOf(c); return `rgba(${r},${g},${b},${a})`; };
+const lightenCss = (c, f) => { const [r, g, b] = rgbOf(c); return `rgb(${Math.round(r + (255 - r) * f)},${Math.round(g + (255 - g) * f)},${Math.round(b + (255 - b) * f)})`; };
+const darkenCss = (c, f) => { const [r, g, b] = rgbOf(c); return `rgb(${Math.round(r * (1 - f))},${Math.round(g * (1 - f))},${Math.round(b * (1 - f))})`; };
+
 // deterministic per-slot randomness so decorations don't reshuffle on reload
 function seededRand(seed) {
   let s = seed * 2654435761 % 2 ** 32;
@@ -317,33 +323,279 @@ export function buildRoom(scene, colliders) {
   scene.add(pallet);
 }
 
-/* ---------------- Fish model ---------------- */
+/* ---------------- Fish model (textured crossed-plane sprites) ---------------- */
 
-function buildFishMesh(species, scale = 1) {
-  const g = new THREE.Group();
-  const s = species.size * scale;
-  const bodyMat = mat(species.color);
-  const finMat = mat(species.fin);
+// Painted body patterns, clipped to the body silhouette.
+function drawPattern(ctx, w, h, cx, cy, bh, len, sp) {
+  const c2 = sp.pattern2 != null ? sp.pattern2 : sp.fin;
+  const backX = cx - len * 0.5, noseX = cx + len * 0.5;
+  const R = seededRand(sp.id.length * 131 + 7);
+  switch (sp.pattern) {
+    case "spots":
+      ctx.fillStyle = cssOf(c2, 0.8);
+      for (let i = 0; i < 16; i++) {
+        const x = backX + R() * len, y = cy - bh + R() * 2 * bh;
+        ctx.beginPath(); ctx.arc(x, y, bh * (0.07 + R() * 0.08), 0, Math.PI * 2); ctx.fill();
+      }
+      break;
+    case "vstripe":
+      ctx.fillStyle = cssOf(c2, 0.85);
+      for (let i = 0; i < 5; i++) {
+        const x = backX + len * (0.15 + 0.7 * i / 4);
+        ctx.fillRect(x - len * 0.028, cy - bh, len * 0.056, 2 * bh);
+      }
+      break;
+    case "bands": // clownfish-style angled white bands with dark edges
+      [0.3, 0.56, 0.82].forEach((t) => {
+        const x = backX + len * t;
+        ctx.beginPath();
+        ctx.moveTo(x - len * 0.07, cy - bh); ctx.lineTo(x + len * 0.03, cy - bh);
+        ctx.lineTo(x + len * 0.07, cy + bh); ctx.lineTo(x - len * 0.03, cy + bh);
+        ctx.closePath();
+        ctx.fillStyle = cssOf(c2, 0.95); ctx.fill();
+        ctx.lineWidth = h * 0.02; ctx.strokeStyle = "rgba(20,20,20,0.55)"; ctx.stroke();
+      });
+      break;
+    case "hstripe": // neon tetra lateral line
+      ctx.fillStyle = cssOf(c2, 0.92);
+      ctx.fillRect(backX, cy - bh * 0.2, len, bh * 0.24);
+      ctx.fillStyle = cssOf(sp.fin, 0.9);
+      ctx.fillRect(cx - len * 0.05, cy + bh * 0.06, len * 0.55, bh * 0.18);
+      break;
+    case "zebra":
+      ctx.fillStyle = cssOf(c2, 0.8);
+      for (let i = 0; i < 9; i++) {
+        const x = backX + len * (0.05 + 0.9 * i / 8);
+        ctx.fillRect(x - len * 0.013, cy - bh, len * 0.026, 2 * bh);
+      }
+      break;
+    case "marble":
+      ctx.fillStyle = cssOf(c2, 0.85);
+      for (let i = 0; i < 8; i++) {
+        const x = backX + R() * len, y = cy - bh + R() * 2 * bh;
+        ctx.beginPath();
+        ctx.ellipse(x, y, len * (0.05 + R() * 0.09), bh * (0.2 + R() * 0.3), R() * 3, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      break;
+    case "patches": { // koi
+      const blob = (col, n) => {
+        ctx.fillStyle = cssOf(col, 0.95);
+        for (let i = 0; i < n; i++) {
+          const x = backX + R() * len, y = cy - bh + R() * 2 * bh;
+          ctx.beginPath();
+          ctx.ellipse(x, y, len * (0.08 + R() * 0.1), bh * (0.3 + R() * 0.35), R() * 3, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      };
+      blob(c2, 3); blob(0x1a1a1a, 2);
+      break;
+    }
+    case "rainbow": {
+      const g = ctx.createLinearGradient(backX, 0, noseX, 0);
+      ["#3a86ff", "#4cc9f0", "#06d6a0", "#ffd166", "#f72585"].forEach((c, i, a) => g.addColorStop(i / (a.length - 1), c));
+      ctx.globalAlpha = 0.55; ctx.fillStyle = g; ctx.fillRect(0, cy - bh, w, 2 * bh); ctx.globalAlpha = 1;
+      break;
+    }
+    case "scale":
+      ctx.strokeStyle = cssOf(sp.fin, 0.5); ctx.lineWidth = h * 0.012;
+      for (let r = 0; r < 3; r++) for (let i = 0; i < 9; i++) {
+        const x = backX + len * (0.08 + 0.86 * i / 8), y = cy - bh * 0.6 + r * bh * 0.6;
+        ctx.beginPath(); ctx.arc(x, y, bh * 0.24, 0.25, Math.PI - 0.25); ctx.stroke();
+      }
+      break;
+    case "gradient": {
+      const g = ctx.createLinearGradient(backX, 0, noseX, 0);
+      g.addColorStop(0, darkenCss(c2, 0.1)); g.addColorStop(1, lightenCss(sp.color, 0.25));
+      ctx.globalAlpha = 0.65; ctx.fillStyle = g; ctx.fillRect(0, cy - bh, w, 2 * bh); ctx.globalAlpha = 1;
+      break;
+    }
+  }
+}
 
-  const body = new THREE.Mesh(new THREE.SphereGeometry(0.085 * s, 10, 8), bodyMat);
-  body.scale.set(1.6, 0.85, 0.5);
+function drawFish(ctx, w, h, sp) {
+  const cx = w * 0.46, cy = h * 0.5;
+  const len = w * 0.74, bh = h * (sp.bodyH || 0.42);
+  const noseX = cx + len * 0.5, backX = cx - len * 0.5;
 
-  const tail = new THREE.Mesh(new THREE.ConeGeometry(0.06 * s, 0.11 * s, 6), finMat);
-  tail.rotation.z = Math.PI / 2;
-  tail.position.x = -0.17 * s;
+  // fins behind body
+  ctx.fillStyle = cssOf(sp.fin, 0.9);
+  ctx.beginPath(); // dorsal
+  ctx.moveTo(cx - bh * 0.2, cy - bh * 0.5);
+  ctx.lineTo(cx + len * 0.05, cy - bh * 1.0);
+  ctx.lineTo(cx + len * 0.2, cy - bh * 0.5);
+  ctx.closePath(); ctx.fill();
+  ctx.beginPath(); // pelvic
+  ctx.moveTo(cx, cy + bh * 0.45);
+  ctx.lineTo(cx + len * 0.02, cy + bh * 0.98);
+  ctx.lineTo(cx + len * 0.18, cy + bh * 0.5);
+  ctx.closePath(); ctx.fill();
+  ctx.beginPath(); // pectoral
+  ctx.ellipse(noseX - len * 0.24, cy + bh * 0.28, len * 0.1, bh * 0.3, -0.5, 0, Math.PI * 2);
+  ctx.fill();
 
-  const dorsal = new THREE.Mesh(new THREE.ConeGeometry(0.035 * s, 0.07 * s, 4), finMat);
-  dorsal.position.set(-0.01 * s, 0.085 * s, 0);
+  // body silhouette
+  const bodyPath = () => {
+    ctx.beginPath();
+    ctx.moveTo(noseX, cy);
+    ctx.quadraticCurveTo(cx, cy - bh, backX, cy - bh * 0.4);
+    ctx.quadraticCurveTo(backX - len * 0.05, cy, backX, cy + bh * 0.4);
+    ctx.quadraticCurveTo(cx, cy + bh, noseX, cy);
+    ctx.closePath();
+  };
+  bodyPath();
+  ctx.save(); ctx.clip();
+  const g = ctx.createLinearGradient(0, cy - bh, 0, cy + bh);
+  g.addColorStop(0, lightenCss(sp.color, 0.38));
+  g.addColorStop(0.45, cssOf(sp.color));
+  g.addColorStop(1, darkenCss(sp.color, 0.32));
+  ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
+  drawPattern(ctx, w, h, cx, cy, bh, len, sp);
+  ctx.restore();
 
-  const eyeMat = new THREE.MeshBasicMaterial({ color: 0x111111 });
-  const eyeGeo = new THREE.SphereGeometry(0.013 * s, 6, 4);
-  const eyeL = new THREE.Mesh(eyeGeo, eyeMat);
-  eyeL.position.set(0.09 * s, 0.02 * s, 0.038 * s);
-  const eyeR = eyeL.clone();
-  eyeR.position.z = -0.038 * s;
+  // outline + gill + eye
+  bodyPath();
+  ctx.lineWidth = Math.max(2, h * 0.024); ctx.strokeStyle = darkenCss(sp.color, 0.5); ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(noseX - len * 0.2, cy - bh * 0.5);
+  ctx.quadraticCurveTo(noseX - len * 0.3, cy, noseX - len * 0.2, cy + bh * 0.5);
+  ctx.lineWidth = Math.max(1, h * 0.012); ctx.strokeStyle = darkenCss(sp.color, 0.28); ctx.stroke();
+  const ex = noseX - len * 0.13, ey = cy - bh * 0.12, er = Math.max(3, bh * 0.17);
+  ctx.beginPath(); ctx.arc(ex, ey, er, 0, Math.PI * 2); ctx.fillStyle = "#fff"; ctx.fill();
+  ctx.beginPath(); ctx.arc(ex + er * 0.2, ey, er * 0.55, 0, Math.PI * 2); ctx.fillStyle = "#111"; ctx.fill();
+  ctx.beginPath(); ctx.arc(ex - er * 0.15, ey - er * 0.25, er * 0.2, 0, Math.PI * 2); ctx.fillStyle = "#fff"; ctx.fill();
+}
 
-  g.add(body, tail, dorsal, eyeL, eyeR);
-  return { group: g, tail };
+function drawSeahorse(ctx, w, h, sp) {
+  const cx = w * 0.5, top = h * 0.12;
+  ctx.save();
+  ctx.translate(cx, top);
+  // body: curved tapering tube + snout + curled tail
+  ctx.beginPath();
+  ctx.moveTo(0, 0);
+  ctx.bezierCurveTo(w * 0.45, h * 0.18, w * 0.32, h * 0.5, w * 0.05, h * 0.62);
+  ctx.bezierCurveTo(-w * 0.18, h * 0.72, -w * 0.05, h * 0.86, w * 0.12, h * 0.8);
+  ctx.lineWidth = Math.max(6, w * 0.16);
+  ctx.lineCap = "round";
+  const grad = ctx.createLinearGradient(0, 0, 0, h);
+  grad.addColorStop(0, lightenCss(sp.color, 0.3));
+  grad.addColorStop(1, darkenCss(sp.color, 0.25));
+  ctx.strokeStyle = grad; ctx.stroke();
+  // head + snout
+  ctx.beginPath(); ctx.arc(0, 0, w * 0.13, 0, Math.PI * 2); ctx.fillStyle = cssOf(sp.color); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(w * 0.05, -h * 0.02); ctx.lineTo(w * 0.3, h * 0.02); ctx.lineTo(w * 0.05, h * 0.06);
+  ctx.closePath(); ctx.fillStyle = darkenCss(sp.color, 0.1); ctx.fill();
+  // crest spines
+  ctx.strokeStyle = cssOf(sp.fin, 0.9); ctx.lineWidth = w * 0.03;
+  for (let i = 0; i < 4; i++) { ctx.beginPath(); ctx.moveTo(-w * 0.08, h * (0.0 + i * 0.06)); ctx.lineTo(-w * 0.16, h * (-0.02 + i * 0.06)); ctx.stroke(); }
+  // eye
+  ctx.beginPath(); ctx.arc(-w * 0.01, 0, w * 0.05, 0, Math.PI * 2); ctx.fillStyle = "#fff"; ctx.fill();
+  ctx.beginPath(); ctx.arc(0, 0, w * 0.025, 0, Math.PI * 2); ctx.fillStyle = "#111"; ctx.fill();
+  ctx.restore();
+}
+
+const fishTexCache = new Map();
+function fishTexture(sp) {
+  if (fishTexCache.has(sp.id)) return fishTexCache.get(sp.id);
+  const seahorse = sp.tail === "seahorse";
+  const W = seahorse ? 120 : 208, H = seahorse ? 168 : 120;
+  const tex = canvasTexture((ctx, w, h) => {
+    ctx.clearRect(0, 0, w, h);
+    if (seahorse) drawSeahorse(ctx, w, h, sp);
+    else drawFish(ctx, w, h, sp);
+  }, W, H);
+  tex.userData = { aspect: H / W };
+  fishTexCache.set(sp.id, tex);
+  return tex;
+}
+
+const tailTexCache = new Map();
+function tailTexture(sp) {
+  if (tailTexCache.has(sp.id)) return tailTexCache.get(sp.id);
+  const tt = sp.tail;
+  const tex = canvasTexture((ctx, w, h) => {
+    ctx.clearRect(0, 0, w, h);
+    const ax = w * 0.92, cy = h * 0.5; // attaches at the right edge
+    const grad = ctx.createLinearGradient(w * 0.05, 0, ax, 0);
+    grad.addColorStop(0, lightenCss(sp.fin, 0.2));
+    grad.addColorStop(1, darkenCss(sp.fin, 0.15));
+    ctx.fillStyle = grad;
+    if (tt === "spiky") { // lionfish rays
+      ctx.strokeStyle = cssOf(sp.fin, 0.92); ctx.lineWidth = h * 0.05;
+      for (let i = 0; i < 7; i++) {
+        const a = -0.75 + 1.5 * i / 6;
+        ctx.save(); ctx.translate(ax, cy); ctx.rotate(a);
+        ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(-w * 0.8, 0); ctx.stroke();
+        ctx.restore();
+      }
+      ctx.strokeStyle = cssOf(sp.pattern2 || 0xffffff, 0.8); ctx.lineWidth = h * 0.018;
+      for (let i = 0; i < 7; i++) {
+        const a = -0.75 + 1.5 * i / 6;
+        ctx.save(); ctx.translate(ax, cy); ctx.rotate(a);
+        ctx.beginPath(); ctx.moveTo(-w * 0.2, 0); ctx.lineTo(-w * 0.8, 0); ctx.stroke();
+        ctx.restore();
+      }
+      return;
+    }
+    ctx.beginPath();
+    if (tt === "fork") {
+      ctx.moveTo(ax, cy); ctx.lineTo(w * 0.08, h * 0.1); ctx.lineTo(w * 0.36, cy);
+      ctx.lineTo(w * 0.08, h * 0.9); ctx.closePath();
+    } else if (tt === "sword") {
+      ctx.moveTo(ax, cy); ctx.lineTo(w * 0.22, h * 0.34); ctx.lineTo(w * 0.02, h * 0.66);
+      ctx.lineTo(w * 0.34, cy + h * 0.05); ctx.closePath();
+    } else if (tt === "round") {
+      ctx.moveTo(ax, cy); ctx.quadraticCurveTo(w * 0.04, h * 0.08, w * 0.06, cy);
+      ctx.quadraticCurveTo(w * 0.04, h * 0.92, ax, cy); ctx.closePath();
+    } else { // fan
+      ctx.moveTo(ax, cy);
+      ctx.quadraticCurveTo(w * 0.12, h * 0.02, w * 0.06, h * 0.28);
+      ctx.quadraticCurveTo(w * 0.0, h * 0.5, w * 0.06, h * 0.72);
+      ctx.quadraticCurveTo(w * 0.12, h * 0.98, ax, cy); ctx.closePath();
+    }
+    ctx.fill();
+    ctx.lineWidth = h * 0.022; ctx.strokeStyle = darkenCss(sp.fin, 0.4); ctx.stroke();
+    ctx.strokeStyle = darkenCss(sp.fin, 0.22); ctx.lineWidth = h * 0.012;
+    for (let i = 0; i < 4; i++) {
+      ctx.beginPath(); ctx.moveTo(ax, cy); ctx.lineTo(w * 0.12, h * (0.18 + 0.64 * i / 3)); ctx.stroke();
+    }
+  }, 128, 128);
+  tailTexCache.set(sp.id, tex);
+  return tex;
+}
+
+function spriteMat(tex) {
+  return new THREE.MeshLambertMaterial({
+    map: tex, transparent: true, alphaTest: 0.5, side: THREE.DoubleSide,
+  });
+}
+
+function buildFishMesh(sp, scale = 1) {
+  const s = (sp.size || 1) * scale;
+  const group = new THREE.Group();
+  const tex = fishTexture(sp);
+  const bodyMat = spriteMat(tex);
+  const seahorse = sp.tail === "seahorse";
+  const W = (seahorse ? 0.26 : 0.52) * s;
+  const H = W * tex.userData.aspect;
+
+  const pA = new THREE.Mesh(new THREE.PlaneGeometry(W, H), bodyMat);
+  const pB = pA.clone(); pB.rotation.y = Math.PI / 2;
+  group.add(pA, pB);
+
+  let tail = null;
+  if (!seahorse) {
+    const tmat = spriteMat(tailTexture(sp));
+    tail = new THREE.Group();
+    tail.position.x = -W * 0.46;
+    const tW = W * 0.55, tH = H * 1.2;
+    const t1 = new THREE.Mesh(new THREE.PlaneGeometry(tW, tH), tmat);
+    t1.position.x = -tW * 0.46;
+    const t2 = t1.clone(); t2.rotation.y = Math.PI / 2;
+    tail.add(t1, t2);
+    group.add(tail);
+  }
+  return { group, tail };
 }
 
 /* ---------------- Fish tank unit (two-tier glowing rack) ---------------- */
@@ -551,7 +803,7 @@ export class TankUnit {
       f.mesh.position.addScaledVector(d, f.speed * dt);
       const yaw = Math.atan2(-d.z, d.x);
       f.mesh.rotation.y += (yaw - f.mesh.rotation.y) * Math.min(1, dt * 4);
-      f.tail.rotation.y = Math.sin(this.time * 9 + f.phase) * 0.5;
+      if (f.tail) f.tail.rotation.y = Math.sin(this.time * 9 + f.phase) * 0.5;
     }
     for (const f of this.ambientFish) {
       const d = f.target.clone().sub(f.mesh.position);
@@ -560,7 +812,7 @@ export class TankUnit {
       f.mesh.position.addScaledVector(d, f.speed * dt);
       const yaw = Math.atan2(-d.z, d.x);
       f.mesh.rotation.y += (yaw - f.mesh.rotation.y) * Math.min(1, dt * 4);
-      f.tail.rotation.y = Math.sin(this.time * 8 + f.phase) * 0.5;
+      if (f.tail) f.tail.rotation.y = Math.sin(this.time * 8 + f.phase) * 0.5;
     }
     for (const b of this.bubbles) {
       b.position.y += b.userData.speed * dt;
@@ -572,30 +824,109 @@ export class TankUnit {
 
 /* ---------------- Shelf unit ---------------- */
 
+// Printed retail label for a product (used on box/bottle fronts).
+const prodLabelCache = new Map();
+function productLabel(prod) {
+  if (prodLabelCache.has(prod.id)) return prodLabelCache.get(prod.id);
+  const words = prod.name.toUpperCase().split(" ");
+  const tex = canvasTexture((ctx, w, h) => {
+    ctx.fillStyle = "#f7f3ea"; ctx.fillRect(0, 0, w, h);
+    ctx.fillStyle = cssOf(prod.color); ctx.fillRect(0, 0, w, h * 0.34);
+    ctx.fillStyle = darkenCss(prod.color, 0.25); ctx.fillRect(0, h * 0.32, w, h * 0.03);
+    // brand tab
+    ctx.fillStyle = "#1d3557"; ctx.fillRect(w * 0.08, h * 0.06, w * 0.84, h * 0.06);
+    // product art swatch
+    ctx.fillStyle = cssOf(prod.color); ctx.strokeStyle = darkenCss(prod.color, 0.3);
+    ctx.lineWidth = 4;
+    ctx.beginPath(); ctx.arc(w * 0.5, h * 0.55, w * 0.16, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = "#fff"; ctx.font = `bold ${Math.round(w * 0.18)}px sans-serif`;
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillText(prod.kind === "fish" ? "🐟" : "🐠", w * 0.5, h * 0.55);
+    // name
+    ctx.fillStyle = "#22303f"; ctx.font = `bold ${Math.round(w * 0.13)}px sans-serif`;
+    words.forEach((word, i) => ctx.fillText(word, w * 0.5, h * (0.82 + i * 0.12) - (words.length - 1) * h * 0.06));
+  }, 96, 128);
+  prodLabelCache.set(prod.id, tex);
+  return tex;
+}
+
 function productMesh(prod) {
   const g = new THREE.Group();
   const body = mat(prod.color);
-  if (prod.shape === "cyl") {
-    const can = new THREE.Mesh(new THREE.CylinderGeometry(0.085, 0.085, 0.26, 10), body);
+  const shape = prod.shape;
+
+  if (shape === "cyl") {
+    const can = new THREE.Mesh(new THREE.CylinderGeometry(0.085, 0.085, 0.26, 12), body);
     can.position.y = 0.13;
-    const lid = new THREE.Mesh(new THREE.CylinderGeometry(0.087, 0.087, 0.04, 10), mat(TRIM));
-    lid.position.y = 0.26;
-    g.add(can, lid);
-  } else if (prod.shape === "bag") {
+    const lid = new THREE.Mesh(new THREE.CylinderGeometry(0.088, 0.088, 0.04, 12), mat(0x3a4a5a));
+    lid.position.y = 0.27;
+    const band = new THREE.Mesh(new THREE.CylinderGeometry(0.086, 0.086, 0.12, 12), mat(TRIM));
+    band.position.y = 0.12;
+    g.add(can, lid, band);
+  } else if (shape === "bottle") {
+    const b = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.07, 0.26, 12), body);
+    b.position.y = 0.13;
+    const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.035, 0.07, 10), body);
+    neck.position.y = 0.29;
+    const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.04, 10), mat(0x2b2d42));
+    cap.position.y = 0.34;
+    const lbl = new THREE.Mesh(new THREE.CylinderGeometry(0.062, 0.072, 0.13, 12), mat(TRIM));
+    lbl.position.y = 0.12;
+    g.add(b, neck, cap, lbl);
+  } else if (shape === "tube") {
+    const t = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.34, 10), body);
+    t.position.y = 0.18;
+    const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.034, 0.034, 0.05, 10), mat(0x2b2d42));
+    cap.position.y = 0.35;
+    g.add(t, cap);
+  } else if (shape === "bag") {
     const bag = new THREE.Mesh(new THREE.SphereGeometry(0.105, 8, 6), body);
     bag.scale.set(1, 1.3, 0.7);
-    bag.position.y = 0.13;
-    const clip = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.035, 0.03), mat(TRIM));
-    clip.position.y = 0.27;
-    g.add(bag, clip);
-  } else {
-    const box = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.27, 0.16), body);
-    box.position.y = 0.135;
-    const label = new THREE.Mesh(new THREE.BoxGeometry(0.205, 0.09, 0.165), mat(TRIM));
-    label.position.y = 0.16;
-    g.add(box, label);
+    bag.position.y = 0.14;
+    const stripe = new THREE.Mesh(new THREE.BoxGeometry(0.19, 0.07, 0.14), mat(TRIM));
+    stripe.position.y = 0.14;
+    const clip = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.035, 0.04), mat(0x495057));
+    clip.position.y = 0.29;
+    g.add(bag, stripe, clip);
+  } else if (shape === "bar") {
+    const bar = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.08, 0.1), body);
+    bar.position.y = 0.18; bar.rotation.z = 0.02;
+    const endA = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.1, 0.12), mat(0x2b2d42));
+    endA.position.set(-0.2, 0.18, 0);
+    const endB = endA.clone(); endB.position.x = 0.2;
+    const stand = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.18, 0.08), mat(0x495057));
+    stand.position.y = 0.09;
+    g.add(bar, endA, endB, stand);
+  } else if (shape === "wood") {
+    const r = seededRand(prod.id.length * 17 + 3);
+    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.07, 0.3, 6), body);
+    trunk.position.y = 0.16; trunk.rotation.z = 0.3;
+    g.add(trunk);
+    for (let i = 0; i < 3; i++) {
+      const branch = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.035, 0.13 + r() * 0.1, 5), body);
+      branch.position.set((r() - 0.5) * 0.12, 0.18 + r() * 0.12, (r() - 0.5) * 0.08);
+      branch.rotation.z = (r() - 0.5) * 1.6;
+      branch.rotation.x = (r() - 0.5) * 1.0;
+      g.add(branch);
+    }
+  } else { // box with printed front label
+    const front = new THREE.MeshLambertMaterial({ map: productLabel(prod) });
+    const side = mat(prod.color);
+    const top = mat(lightenColor(prod.color));
+    const box = new THREE.Mesh(
+      new THREE.BoxGeometry(0.22, 0.28, 0.16),
+      [side, side, top, side, front, side]
+    );
+    box.position.y = 0.14;
+    g.add(box);
   }
   return g;
+}
+
+// lighten a colour int (for box tops)
+function lightenColor(c) {
+  const [r, g, b] = rgbOf(c);
+  return (Math.min(255, r + 40) << 16) | (Math.min(255, g + 40) << 8) | Math.min(255, b + 40);
 }
 
 export class ShelfUnit {
