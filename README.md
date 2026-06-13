@@ -39,9 +39,13 @@ Progress autosaves to your browser (localStorage).
 
 ## Tech
 
-- [Three.js](https://threejs.org) (vendored in `lib/`, MIT licensed) for rendering — low-poly store built from primitives, no model files or textures to download.
+- [Three.js](https://threejs.org) (vendored in `lib/`, MIT licensed) for rendering — low-poly store built from primitives.
 - Vanilla JS ES modules, no framework, no build step.
 - DOM-based UI layer (HUD, tablet, checkout) over the WebGL canvas.
+
+## Credits
+
+- Fish & decoration sprites: **Fish Pack by [Kenney](https://kenney.nl/assets/fish-pack)** — licensed CC0 1.0 (public domain). Several species reuse these base shapes recolored at runtime. See [`assets/CREDITS.md`](assets/CREDITS.md). If a sprite ever fails to load, the game falls back to its built-in hand-painted fish.
 
 ## Classic version
 

@@ -4,7 +4,7 @@ import {
   CATALOG, item, DAY_LEN, CARE_DECAY_PER_DAY, xpForLevel, MAX_LEVEL,
   PALLET, REGISTER_ZONE, SHELF_ROWS,
 } from "./data.js";
-import { buildRoom, TankUnit, ShelfUnit, createBoxMesh } from "./world.js";
+import { buildRoom, TankUnit, ShelfUnit, createBoxMesh, loadFishAssets } from "./world.js";
 import { Player } from "./player.js";
 import { CustomerManager } from "./customers.js";
 import { UI } from "./ui.js";
@@ -258,4 +258,6 @@ function loop(now) {
   game.renderer.render(game.scene, game.camera);
 }
 
-init();
+// Load the fish sprite pack first; init() falls back to procedural art if
+// any asset fails to load, so we run it regardless of the outcome.
+loadFishAssets().then(init, init);

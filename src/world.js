@@ -323,6 +323,66 @@ export function buildRoom(scene, colliders) {
   scene.add(pallet);
 }
 
+/* ---------------- Fish art assets (Kenney Fish Pack, CC0) ---------------- */
+
+// Base sprites are recolored at runtime so a handful of shapes cover the
+// whole roster (same approach as commercial recolor sheets). base: PNG to
+// load; tint: hue/saturation applied while keeping the original shading.
+const SPRITE_MAP = {
+  guppy:     { base: "fish_orange" },
+  goldfish:  { base: "fish_orange", tint: 0xffb703 },
+  danio:     { base: "fish_grey" },
+  molly:     { base: "fish_grey",   tint: 0x2b2d42 },
+  tetra:     { base: "fish_blue",   tint: 0x00b4d8 },
+  cory:      { base: "fish_grey",   tint: 0xc2a37a },
+  swordtail: { base: "fish_red" },
+  betta:     { base: "fish_red",    tint: 0xb5179e },
+  rainbow:   { base: "fish_blue" },
+  gourami:   { base: "fish_green" },
+  angelfish: { base: "fish_pink",   tint: 0xe9ecef },
+  clownfish: { base: "fish_orange", tint: 0xf3722c },
+  ram:       { base: "fish_blue",   tint: 0x3a86ff },
+  discus:    { base: "fish_pink",   tint: 0x118ab2 },
+  oscar:     { base: "fish_brown",  tint: 0x7a3a14 },
+  lionfish:  { base: "fish_red",    tint: 0x9b2226 },
+  koi:       { base: "fish_orange", tint: 0xf2a65a },
+  arowana:   { base: "fish_grey_long_a" },
+  // seahorse intentionally absent -> renders with the procedural painter
+};
+
+const FISH_FILES = [
+  "fish_blue", "fish_brown", "fish_green", "fish_grey",
+  "fish_grey_long_a", "fish_grey_long_b", "fish_orange", "fish_pink", "fish_red",
+];
+export const FISH_IMG = {};
+
+export function loadFishAssets(base = "assets/fish/") {
+  return Promise.all(FISH_FILES.map((name) => new Promise((res) => {
+    const img = new Image();
+    img.onload = () => { FISH_IMG[name] = img; res(); };
+    img.onerror = () => res(); // tolerate a missing file -> procedural fallback
+    img.src = base + name + ".png";
+  })));
+}
+
+// Recolor a sprite to `tint` (hue+saturation), preserving its shading & alpha.
+function recolorCanvas(img, tint) {
+  const w = img.width, h = img.height;
+  const c = document.createElement("canvas");
+  c.width = w; c.height = h;
+  const ctx = c.getContext("2d");
+  ctx.drawImage(img, 0, 0);
+  if (tint != null) {
+    ctx.globalCompositeOperation = "color";
+    ctx.fillStyle = cssOf(tint);
+    ctx.fillRect(0, 0, w, h);
+    ctx.globalCompositeOperation = "destination-in"; // clip back to fish alpha
+    ctx.drawImage(img, 0, 0);
+    ctx.globalCompositeOperation = "source-over";
+  }
+  return c;
+}
+
 /* ---------------- Fish model (textured crossed-plane sprites) ---------------- */
 
 // Painted body patterns, clipped to the body silhouette.
@@ -494,9 +554,28 @@ function drawSeahorse(ctx, w, h, sp) {
   ctx.restore();
 }
 
+// True when a real Kenney sprite is available for this species.
+function hasSprite(sp) {
+  const m = SPRITE_MAP[sp.id];
+  return !!(m && FISH_IMG[m.base]) && sp.tail !== "seahorse";
+}
+
 const fishTexCache = new Map();
 function fishTexture(sp) {
   if (fishTexCache.has(sp.id)) return fishTexCache.get(sp.id);
+
+  // Preferred path: recolored Kenney sprite (already includes fins + tail).
+  if (hasSprite(sp)) {
+    const m = SPRITE_MAP[sp.id];
+    const img = FISH_IMG[m.base];
+    const tex = new THREE.CanvasTexture(recolorCanvas(img, m.tint));
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.userData = { aspect: img.height / img.width, sprite: true };
+    fishTexCache.set(sp.id, tex);
+    return tex;
+  }
+
+  // Fallback: hand-painted canvas fish (and the bespoke seahorse).
   const seahorse = sp.tail === "seahorse";
   const W = seahorse ? 120 : 208, H = seahorse ? 168 : 120;
   const tex = canvasTexture((ctx, w, h) => {
@@ -504,7 +583,7 @@ function fishTexture(sp) {
     if (seahorse) drawSeahorse(ctx, w, h, sp);
     else drawFish(ctx, w, h, sp);
   }, W, H);
-  tex.userData = { aspect: H / W };
+  tex.userData = { aspect: H / W, sprite: false };
   fishTexCache.set(sp.id, tex);
   return tex;
 }
@@ -574,17 +653,22 @@ function buildFishMesh(sp, scale = 1) {
   const s = (sp.size || 1) * scale;
   const group = new THREE.Group();
   const tex = fishTexture(sp);
-  const bodyMat = spriteMat(tex);
+  const sprite = tex.userData.sprite;
   const seahorse = sp.tail === "seahorse";
-  const W = (seahorse ? 0.26 : 0.52) * s;
+  const bodyMat = spriteMat(tex);
+
+  // Kenney sprites are a whole fish in a 64x64 frame; procedural fish are
+  // tightly cropped, so they use a smaller plane.
+  const W = (sprite ? 0.56 : seahorse ? 0.26 : 0.52) * s;
   const H = W * tex.userData.aspect;
 
   const pA = new THREE.Mesh(new THREE.PlaneGeometry(W, H), bodyMat);
   const pB = pA.clone(); pB.rotation.y = Math.PI / 2;
   group.add(pA, pB);
 
+  // Procedural fish get a separate wiggling tail; sprites already include it.
   let tail = null;
-  if (!seahorse) {
+  if (!sprite && !seahorse) {
     const tmat = spriteMat(tailTexture(sp));
     tail = new THREE.Group();
     tail.position.x = -W * 0.46;
@@ -595,7 +679,7 @@ function buildFishMesh(sp, scale = 1) {
     tail.add(t1, t2);
     group.add(tail);
   }
-  return { group, tail };
+  return { group, tail, sprite };
 }
 
 /* ---------------- Fish tank unit (two-tier glowing rack) ---------------- */
@@ -630,7 +714,7 @@ export class TankUnit {
     const glow = new THREE.Mesh(new THREE.PlaneGeometry(1.86, MAIN_H - 0.12), this.glowMat);
     glow.position.set(0, MAIN_Y + MAIN_H / 2, -0.3);
 
-    this.waterMat = new THREE.MeshLambertMaterial({ color: 0x3aa6dd, transparent: true, opacity: 0.42 });
+    this.waterMat = new THREE.MeshLambertMaterial({ color: 0x4fb4e0, transparent: true, opacity: 0.26 });
     this.water = new THREE.Mesh(new THREE.BoxGeometry(1.86, MAIN_H - 0.18, 0.58), this.waterMat);
     this.water.position.y = MAIN_Y + (MAIN_H - 0.18) / 2 + 0.1;
 
@@ -659,7 +743,7 @@ export class TankUnit {
       new THREE.MeshBasicMaterial({ color: 0x59d1f9 }));
     decoGlow.position.set(0, DECO_Y + decoH / 2, -0.28);
     const decoWater = new THREE.Mesh(new THREE.BoxGeometry(1.86, decoH - 0.1, 0.52),
-      new THREE.MeshLambertMaterial({ color: 0x3aa6dd, transparent: true, opacity: 0.35 }));
+      new THREE.MeshLambertMaterial({ color: 0x4fb4e0, transparent: true, opacity: 0.22 }));
     decoWater.position.y = DECO_Y + decoH / 2;
     const decoGlass = new THREE.Mesh(new THREE.BoxGeometry(1.94, decoH, 0.62), glassMat);
     decoGlass.position.y = DECO_Y + decoH / 2;
@@ -789,8 +873,8 @@ export class TankUnit {
   setCare(care) {
     const t = Math.max(0, Math.min(1, care / 100));
     // clean blue -> murky green; backlight dims as the tank fouls
-    this.waterMat.color.setHex(0x3aa6dd).lerp(new THREE.Color(0x5a7f3d), 1 - t);
-    this.waterMat.opacity = 0.4 + (1 - t) * 0.38;
+    this.waterMat.color.setHex(0x4fb4e0).lerp(new THREE.Color(0x5a7f3d), 1 - t);
+    this.waterMat.opacity = 0.24 + (1 - t) * 0.45;
     this.glowMat.color.setHex(0x3ec3f7).lerp(new THREE.Color(0x4a5a35), 1 - t);
   }
 
@@ -804,6 +888,7 @@ export class TankUnit {
       const yaw = Math.atan2(-d.z, d.x);
       f.mesh.rotation.y += (yaw - f.mesh.rotation.y) * Math.min(1, dt * 4);
       if (f.tail) f.tail.rotation.y = Math.sin(this.time * 9 + f.phase) * 0.5;
+      else f.mesh.rotation.z = Math.sin(this.time * 5 + f.phase) * 0.07;
     }
     for (const f of this.ambientFish) {
       const d = f.target.clone().sub(f.mesh.position);
@@ -813,6 +898,7 @@ export class TankUnit {
       const yaw = Math.atan2(-d.z, d.x);
       f.mesh.rotation.y += (yaw - f.mesh.rotation.y) * Math.min(1, dt * 4);
       if (f.tail) f.tail.rotation.y = Math.sin(this.time * 8 + f.phase) * 0.5;
+      else f.mesh.rotation.z = Math.sin(this.time * 5 + f.phase) * 0.07;
     }
     for (const b of this.bubbles) {
       b.position.y += b.userData.speed * dt;
