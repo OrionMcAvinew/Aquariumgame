@@ -73,6 +73,29 @@ export const PRODUCTS = [
 
 export const CATALOG = [...FISH, ...PRODUCTS];
 const byId = new Map(CATALOG.map((c) => [c.id, c]));
+
+// Achievements — test(state) checks lifetime counters + current state.
+export const ACHIEVEMENTS = [
+  { id: "first_sale", name: "First Sale",       desc: "Sell your first item",        test: (s) => s.lifetime.sold >= 1 },
+  { id: "sold_50",    name: "Fishmonger",       desc: "Sell 50 items",               test: (s) => s.lifetime.sold >= 50 },
+  { id: "sold_250",   name: "Aquatic Empire",   desc: "Sell 250 items",              test: (s) => s.lifetime.sold >= 250 },
+  { id: "served_100", name: "People Person",    desc: "Serve 100 customers",         test: (s) => s.lifetime.served >= 100 },
+  { id: "cash_2000",  name: "In the Money",     desc: "Hold $2,000 at once",         test: (s) => s.cash >= 2000 },
+  { id: "cash_10000", name: "Tycoon",           desc: "Hold $10,000 at once",        test: (s) => s.cash >= 10000 },
+  { id: "level_5",    name: "Established",      desc: "Reach level 5",               test: (s) => s.level >= 5 },
+  { id: "level_9",    name: "Master Aquarist",  desc: "Reach the top level",         test: (s) => s.level >= 9 },
+  { id: "tanks_8",    name: "Full House",       desc: "Own all 8 tanks",             test: (s) => s.tanksOwned >= 8 },
+  { id: "shelves_8",  name: "Fully Stocked",    desc: "Own all 8 shelves",           test: (s) => s.shelvesOwned >= 8 },
+  { id: "day_7",      name: "Open for Business",desc: "Reach day 7",                 test: (s) => s.day >= 7 },
+  { id: "goal_5",     name: "Overachiever",     desc: "Hit the daily goal 5 times",  test: (s) => s.lifetime.goals >= 5 },
+];
+
+// Hireable staff — one-time hire cost + a daily wage deducted at closing.
+export const STAFF = [
+  { id: "cashier",  name: "Cashier",  emoji: "🧑‍💼", uniform: 0x2a9d8f, hire: 400, wage: 80, desc: "Scans and rings up the queue for you" },
+  { id: "aquarist", name: "Aquarist", emoji: "🧑‍🔧", uniform: 0x457b9d, hire: 300, wage: 55, desc: "Keeps every tank fed and clean" },
+  { id: "stocker",  name: "Stocker",  emoji: "🧑‍🏭", uniform: 0xf4a261, hire: 300, wage: 60, desc: "Unpacks delivered boxes onto tanks & shelves" },
+];
 export const item = (id) => byId.get(id);
 
 // Cumulative XP needed to reach a level (1 XP per $1 of sales).

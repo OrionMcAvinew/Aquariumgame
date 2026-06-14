@@ -304,10 +304,13 @@ export class CustomerManager {
     if (!customer.cart.every((i) => i.scanned)) return;
     const total = customer.cart.reduce((s, i) => s + i.price, 0);
     g.state.cash += total;
-    g.addXP(total);
     g.state.stats.revenue += total;
     g.state.stats.sold += customer.cart.length;
     g.state.stats.served++;
+    g.state.lifetime.revenue += total;
+    g.state.lifetime.sold += customer.cart.length;
+    g.state.lifetime.served++;
+    g.addXP(total); // also runs achievement checks
     g.sound.chaching();
     g.ui.toast(`💰 Sale: $${total}`, "good");
     customer.cart = [];

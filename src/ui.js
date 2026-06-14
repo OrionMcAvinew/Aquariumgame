@@ -3,6 +3,7 @@
 import {
   CATALOG, item, xpForLevel, MAX_LEVEL, DAY_LEN, QUEUE_PATIENCE,
   tankPrice, shelfPrice, MAX_TANK_SLOTS, MAX_SHELF_SLOTS, DELIVERY_TIME,
+  ACHIEVEMENTS, STAFF,
 } from "./data.js";
 
 const $ = (id) => document.getElementById(id);
@@ -117,7 +118,26 @@ export class UI {
     if (name === "order") this.renderOrderTab(body);
     else if (name === "prices") this.renderPricesTab(body);
     else if (name === "store") this.renderStoreTab(body);
+    else if (name === "trophies") this.renderTrophiesTab(body);
     else this.renderHelpTab(body);
+  }
+
+  renderTrophiesTab(body) {
+    const s = this.game.state;
+    const got = s.achievements.length, total = ACHIEVEMENTS.length;
+    const note = document.createElement("p");
+    note.className = "tab-note";
+    note.textContent = `Unlocked ${got} of ${total} achievements.`;
+    body.appendChild(note);
+    for (const a of ACHIEVEMENTS) {
+      const unlocked = s.achievements.includes(a.id);
+      const row = document.createElement("div");
+      row.className = "order-row" + (unlocked ? "" : " locked");
+      row.innerHTML = `
+        <span class="swatch" style="background:${unlocked ? "#ffd166" : "#33445a"};display:flex;align-items:center;justify-content:center">${unlocked ? "🏆" : "🔒"}</span>
+        <div class="order-info"><b>${a.name}</b><small>${a.desc}</small></div>`;
+      body.appendChild(row);
+    }
   }
 
   renderOrderTab(body) {
@@ -240,6 +260,7 @@ export class UI {
         s.cash -= tCost; s.stats.spent += tCost;
         g.addTankUnit();
         this.toast("🛁 New tank installed!", "good");
+        g.checkAchievements();
         this.showTab("store");
         g.save();
       });
@@ -249,9 +270,35 @@ export class UI {
         s.cash -= shCost; s.stats.spent += shCost;
         g.addShelfUnit();
         this.toast("🗄️ New shelf installed!", "good");
+        g.checkAchievements();
         this.showTab("store");
         g.save();
       });
+
+    // ---- Staff ----
+    const staffHead = document.createElement("div");
+    staffHead.className = "order-section";
+    staffHead.textContent = "👥 Staff (daily wage)";
+    body.appendChild(staffHead);
+    for (const def of STAFF) {
+      const hired = s.staff[def.id];
+      const row = document.createElement("div");
+      row.className = "order-row";
+      row.innerHTML = `<div class="order-info"><b>${def.emoji} ${def.name}</b><small>${def.desc} · hire $${def.hire}, $${def.wage}/day</small></div>`;
+      const btn = document.createElement("button");
+      if (hired) {
+        btn.className = "ui-btn danger";
+        btn.textContent = "Fire";
+        btn.addEventListener("click", () => { g.fireStaff(def.id); this.showTab("store"); });
+      } else {
+        btn.className = "ui-btn primary";
+        btn.textContent = `Hire $${def.hire}`;
+        btn.disabled = s.cash < def.hire;
+        btn.addEventListener("click", () => { g.hireStaff(def.id); this.showTab("store"); });
+      }
+      row.appendChild(btn);
+      body.appendChild(row);
+    }
 
     const saveRow = document.createElement("div");
     saveRow.className = "order-row";
@@ -287,6 +334,8 @@ export class UI {
         <p><b>💾 Saving:</b> the game autosaves continuously to this browser. You can also tap <b>Save now</b> in the Store tab.</p>
         <p><b>📈 Levels:</b> every $1 of sales is 1 XP. Leveling up unlocks new species, products, and more customers.</p>
         <p><b>🎯 Daily goal:</b> hit the day's revenue target (shown in the HUD) to earn a cash bonus at closing time.</p>
+        <p><b>👥 Staff:</b> in the Store tab you can hire a Cashier (auto-rings up the queue), an Aquarist (auto-cleans tanks), and a Stocker (auto-unpacks deliveries) for a daily wage.</p>
+        <p><b>🏆 Achievements:</b> check the trophy tab to track milestones as you grow the shop.</p>
         <p><b>🔊 Sound:</b> toggle the ambient aquarium audio with the speaker button in the HUD.</p>
         <p class="controls-note"><b>Controls:</b> WASD move · mouse look (click to capture) · E interact · TAB tablet · SHIFT run.<br>
         On touch: left side = move stick, right side = look, buttons for the rest.</p>
@@ -358,15 +407,16 @@ export class UI {
 
   /* ---------------- Day summary ---------------- */
 
-  showSummary(day, stats, rent, goal = 0, goalMet = false, bonus = 0) {
+  showSummary(day, stats, rent, goal = 0, goalMet = false, bonus = 0, wages = 0) {
     this.game.paused = true;
     document.exitPointerLock?.();
-    const net = stats.revenue - stats.spent - rent + bonus;
+    const net = stats.revenue - stats.spent - rent - wages + bonus;
     $("summary-title").textContent = `Day ${day} complete!`;
     $("summary-body").innerHTML = `
       <div class="sum-row"><span>Revenue</span><b class="pos">+$${stats.revenue}</b></div>
       <div class="sum-row"><span>Daily goal ($${goal})</span><b class="${goalMet ? "pos" : "neg"}">${goalMet ? `met +$${bonus}` : "missed"}</b></div>
       <div class="sum-row"><span>Stock & upgrades</span><b class="neg">−$${stats.spent}</b></div>
+      ${wages ? `<div class="sum-row"><span>Staff wages</span><b class="neg">−$${wages}</b></div>` : ""}
       <div class="sum-row"><span>Rent</span><b class="neg">−$${rent}</b></div>
       <div class="sum-row total"><span>Net</span><b class="${net >= 0 ? "pos" : "neg"}">${net >= 0 ? "+" : "−"}$${Math.abs(net)}</b></div>
       <hr>

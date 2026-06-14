@@ -1537,11 +1537,11 @@ const HAIR = [0x2b2d42, 0x6f4518, 0xbf9b30, 0x778da9, 0x431407];
 
 const PANTS = [0x33415c, 0x2b2d42, 0x4a4e69, 0x5a3e2b, 0x355070];
 
-export function createCustomerMesh() {
+export function createCustomerMesh(opts = {}) {
   const g = new THREE.Group();
-  const shirt = SHIRT[(Math.random() * SHIRT.length) | 0];
+  const shirt = opts.uniform != null ? opts.uniform : SHIRT[(Math.random() * SHIRT.length) | 0];
   const skin = SKIN[(Math.random() * SKIN.length) | 0];
-  const pants = PANTS[(Math.random() * PANTS.length) | 0];
+  const pants = opts.uniform != null ? 0x2b2d42 : PANTS[(Math.random() * PANTS.length) | 0];
   const skinMat = mat(skin);
 
   const torso = new THREE.Mesh(new THREE.CapsuleGeometry(0.2, 0.46, 4, 8), mat(shirt));
@@ -1582,7 +1582,12 @@ export function createCustomerMesh() {
   basket.visible = false;
 
   g.add(torso, hips, head, hair, nose, armL, armR, legL, legR, basket);
-  g.scale.setScalar(0.92 + Math.random() * 0.18); // height variation
+  if (opts.uniform != null) { // staff get a white apron
+    const apron = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.4, 0.06), mat(0xf2f1ea));
+    apron.position.set(0, 0.92, 0.18);
+    g.add(apron);
+  }
+  g.scale.setScalar(opts.uniform != null ? 1.0 : 0.92 + Math.random() * 0.18);
   g.userData.basket = basket;
   g.userData.limbs = { armL, armR, legL, legR };
   return g;
@@ -1634,6 +1639,18 @@ export class Checkout {
     game.scene.add(hit);
     game.interactables.push(hit);
 
+    // a paper grocery bag on the bagging side; scanned items hop into it
+    const bag = new THREE.Group();
+    const sack = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.34, 0.26), mat(0xcaa472));
+    sack.position.y = 0.17;
+    const rim = new THREE.Mesh(new THREE.BoxGeometry(0.33, 0.05, 0.29), mat(0xb8915e));
+    rim.position.y = 0.345;
+    bag.add(sack, rim);
+    bag.position.set(COUNTER.x + COUNTER.w / 2 - 0.45, COUNTER.h + 0.04, COUNTER.z + 0.3);
+    bag.castShadow = true;
+    game.scene.add(bag);
+    this.bagPos = bag.position.clone();
+
     this._draw();
   }
 
@@ -1650,7 +1667,7 @@ export class Checkout {
       mesh.position.set(slot.x, COUNTER.h + 0.05, slot.z);
       mesh.rotation.y = (i % 2 ? 0.3 : -0.3);
       mesh.userData.interact = { type: "scanItem", checkout: this, entry };
-      entry._mesh = mesh; entry._target = null;
+      entry._mesh = mesh; entry._to = null; entry._t = 0;
       this.game.scene.add(mesh);
       this.game.interactables.push(mesh);
       this.items.push(entry);
@@ -1668,11 +1685,10 @@ export class Checkout {
     if (!entry || entry.scanned) return;
     entry.scanned = true;
     this.game.sound.scan();
-    const bi = this.scannedCount() - 1;
-    entry._target = {
-      x: COUNTER.x + COUNTER.w / 2 - 0.62 + (bi % 2) * 0.22,
-      z: COUNTER.z + 0.3, // player/bagging side
-    };
+    // arc the item into the bag
+    entry._from = entry._mesh.position.clone();
+    entry._to = this.bagPos.clone().add(new THREE.Vector3((Math.random() - 0.5) * 0.08, 0.06, (Math.random() - 0.5) * 0.06));
+    entry._t = 0;
     const idx = this.game.interactables.indexOf(entry._mesh);
     if (idx >= 0) this.game.interactables.splice(idx, 1); // can't rescan
     this._draw();
@@ -1698,7 +1714,7 @@ export class Checkout {
         const i = this.game.interactables.indexOf(e._mesh);
         if (i >= 0) this.game.interactables.splice(i, 1);
       }
-      e._mesh = null; e._target = null;
+      e._mesh = null; e._to = null;
     }
     this.items = [];
     this.customer = null;
@@ -1707,11 +1723,13 @@ export class Checkout {
 
   update(dt) {
     for (const e of this.items) {
-      if (e._mesh && e._target) {
-        const m = e._mesh, t = e._target;
-        m.position.x += (t.x - m.position.x) * Math.min(1, dt * 9);
-        m.position.z += (t.z - m.position.z) * Math.min(1, dt * 9);
-        m.rotation.y += dt * 2.5;
+      if (e._mesh && e._to && e._mesh.visible) {
+        e._t = Math.min(1, e._t + dt * 1.7);
+        const t = e._t;
+        e._mesh.position.lerpVectors(e._from, e._to, t);
+        e._mesh.position.y += Math.sin(Math.PI * t) * 0.2; // parabolic hop
+        e._mesh.rotation.y += dt * 5;
+        if (t >= 1) e._mesh.visible = false; // landed in the bag
       }
     }
   }
