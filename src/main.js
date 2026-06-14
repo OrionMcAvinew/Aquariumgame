@@ -2,9 +2,9 @@
 import * as THREE from "three";
 import {
   CATALOG, item, DAY_LEN, CARE_DECAY_PER_DAY, xpForLevel, MAX_LEVEL,
-  PALLET, REGISTER_ZONE, SHELF_ROWS,
+  PALLET, REGISTER_ZONE, SHELF_ROWS, TANK_FISH_CAP, ROW_CAP, ACHIEVEMENTS, STAFF,
 } from "./data.js";
-import { buildRoom, TankUnit, ShelfUnit, createBoxMesh, loadFishAssets, Checkout } from "./world.js";
+import { buildRoom, TankUnit, ShelfUnit, createBoxMesh, loadFishAssets, Checkout, createCustomerMesh } from "./world.js";
 import { Player } from "./player.js";
 import { CustomerManager } from "./customers.js";
 import { UI } from "./ui.js";
@@ -22,11 +22,14 @@ const game = {
 
 /* ---------------- State ---------------- */
 
+// Daily revenue target — meeting it pays a bonus at day's end.
+const goalFor = (level, day) => Math.round(120 + level * 55 + (day - 1) * 35);
+
 function defaultState() {
   const prices = {};
   for (const c of CATALOG) prices[c.id] = c.market;
   return {
-    cash: 300, day: 1, time: 0, level: 1, xp: 0,
+    cash: 300, day: 1, time: 0, level: 1, xp: 0, goal: goalFor(1, 1),
     tanksOwned: 2, shelvesOwned: 1,
     tanks: [
       { fish: ["guppy", "guppy", "guppy", "guppy"], care: 100 },
@@ -37,6 +40,9 @@ function defaultState() {
     orders: [],   // { itemId, count, eta }
     boxes: [],    // { itemId, count, x, z } (+ mesh at runtime)
     stats: freshStats(),
+    lifetime: { sold: 0, served: 0, revenue: 0, goals: 0 },
+    achievements: [],
+    staff: { cashier: false, aquarist: false, stocker: false },
   };
 }
 
@@ -65,6 +71,10 @@ function loadState() {
     s.prices = { ...defaultPrices, ...d.prices };
     s.stats = { ...freshStats(), ...d.stats };
     s.boxes = (d.boxes || []).map((b) => ({ itemId: b.itemId, count: b.count, x: b.x, z: b.z }));
+    s.goal = goalFor(s.level, s.day); // keep the target in step with progress
+    s.lifetime = { sold: 0, served: 0, revenue: 0, goals: 0, ...d.lifetime };
+    s.achievements = d.achievements || [];
+    s.staff = { cashier: false, aquarist: false, stocker: false, ...d.staff };
     return s;
   } catch {
     return null;
@@ -89,7 +99,126 @@ game.addXP = (n) => {
     const unlocks = CATALOG.filter((c) => c.level === s.level).map((c) => c.name);
     game.ui.toast(`🎉 Level ${s.level}!${unlocks.length ? " Unlocked: " + unlocks.join(", ") : ""}`, "good");
   }
+  game.checkAchievements();
 };
+
+game.checkAchievements = () => {
+  const s = game.state;
+  for (const a of ACHIEVEMENTS) {
+    if (!s.achievements.includes(a.id) && a.test(s)) {
+      s.achievements.push(a.id);
+      game.sound.levelup();
+      game.ui.toast(`🏆 Achievement unlocked: ${a.name}`, "good");
+    }
+  }
+};
+
+/* ---------------- Staff ---------------- */
+
+const STAFF_SPOT = {
+  cashier:  { x: 4.35, z: 6.25, rotY: 0 },
+  aquarist: { x: -7.4, z: 2.6, rotY: -Math.PI / 2 },
+  stocker:  { x: -4.6, z: 5.3, rotY: Math.PI },
+};
+game.staffMeshes = {};
+
+game.hireStaff = (id) => {
+  const def = STAFF.find((s) => s.id === id);
+  if (!def || game.state.staff[id] || game.state.cash < def.hire) return;
+  game.state.cash -= def.hire;
+  game.state.stats.spent += def.hire;
+  game.state.staff[id] = true;
+  game.spawnStaffMesh(id, def);
+  game.ui.toast(`${def.emoji} Hired a ${def.name}! Wage $${def.wage}/day.`, "good");
+  game.save();
+};
+
+game.fireStaff = (id) => {
+  if (!game.state.staff[id]) return;
+  game.state.staff[id] = false;
+  if (game.staffMeshes[id]) { game.scene.remove(game.staffMeshes[id]); delete game.staffMeshes[id]; }
+  game.save();
+};
+
+game.spawnStaffMesh = (id, def) => {
+  if (game.staffMeshes[id]) return;
+  const spot = STAFF_SPOT[id];
+  const m = createCustomerMesh({ uniform: def.uniform });
+  m.position.set(spot.x, 0, spot.z);
+  m.rotation.y = spot.rotY;
+  m.userData.bob = Math.random() * 6;
+  game.scene.add(m);
+  game.staffMeshes[id] = m;
+};
+
+// Move one delivered box's contents onto a matching tank/shelf with room.
+game.autoStock = () => {
+  const s = game.state;
+  if (s.boxes.length === 0) return;
+  const box = s.boxes[0];
+  const it = item(box.itemId);
+  if (it.kind === "fish") {
+    const ti = s.tanks.findIndex((t) => t.fish.length < TANK_FISH_CAP);
+    if (ti === -1) return;
+    const n = Math.min(box.count, TANK_FISH_CAP - s.tanks[ti].fish.length);
+    for (let i = 0; i < n; i++) s.tanks[ti].fish.push(box.itemId);
+    box.count -= n;
+    game.tankUnits[ti].syncFish(s.tanks[ti].fish);
+  } else {
+    let moved = 0;
+    for (const [si, shelf] of s.shelves.entries()) {
+      for (const row of shelf.rows) {
+        if (box.count <= 0) break;
+        if (row.product === box.itemId || (!row.product && row.count === 0)) {
+          row.product = box.itemId;
+          const n = Math.min(box.count, ROW_CAP - row.count);
+          row.count += n; box.count -= n; moved += n;
+        }
+      }
+      if (moved) game.shelfUnits[si].syncStock(shelf.rows);
+      if (box.count <= 0) break;
+    }
+    if (moved === 0) return;
+  }
+  if (box.count <= 0) {
+    s.boxes.splice(0, 1);
+    game.scene.remove(box.mesh);
+    const i = game.interactables.indexOf(box.mesh);
+    if (i >= 0) game.interactables.splice(i, 1);
+  }
+};
+
+const staffTimers = { cashier: 0, aquarist: 0, stocker: 0 };
+function updateStaff(dt) {
+  const s = game.state;
+  for (const id in game.staffMeshes) {
+    const m = game.staffMeshes[id];
+    m.userData.bob += dt * 2;
+    m.position.y = Math.abs(Math.sin(m.userData.bob)) * 0.02;
+  }
+  if (s.staff.cashier && game.checkout.customer) {
+    staffTimers.cashier -= dt;
+    if (staffTimers.cashier <= 0) {
+      staffTimers.cashier = 0.7;
+      const next = game.checkout.items.find((i) => !i.scanned);
+      if (next) { game.checkout.scan(next); game.ui.updateCheckout(); }
+      else game.checkout.charge();
+    }
+  }
+  if (s.staff.aquarist) {
+    staffTimers.aquarist -= dt;
+    if (staffTimers.aquarist <= 0) {
+      staffTimers.aquarist = 3.5;
+      let lo = -1, loCare = 90;
+      s.tanks.forEach((t, i) => { if (t.care < loCare) { loCare = t.care; lo = i; } });
+      if (lo !== -1) { s.tanks[lo].care = 100; game.tankUnits[lo].setCare(100); }
+    }
+  }
+  if (s.staff.stocker) {
+    staffTimers.stocker -= dt;
+    if (staffTimers.stocker <= 0) { staffTimers.stocker = 2.5; game.autoStock(); }
+  }
+}
 
 /* ---------------- World objects ---------------- */
 
@@ -139,15 +268,24 @@ function palletDropPos() {
 function endDay() {
   const s = game.state;
   const rent = 20 + 8 * (s.tanksOwned + s.shelvesOwned);
+  const wages = STAFF.reduce((sum, st) => sum + (s.staff[st.id] ? st.wage : 0), 0);
   const stats = { ...s.stats };
-  s.cash -= rent;
+  const goal = s.goal;
+  const goalMet = stats.revenue >= goal;
+  const bonus = goalMet ? Math.round(goal * 0.2) + 25 : 0;
+  s.cash -= rent + wages;
+  if (bonus) s.cash += bonus;
+  if (goalMet) s.lifetime.goals++;
   s.day++;
   s.time = 0;
   s.stats = freshStats();
+  s.goal = goalFor(s.level, s.day);
   game.customers.clearAll();
   game.checkout?.clear();
-  game.ui.showSummary(s.day - 1, stats, rent);
+  game.ui.showSummary(s.day - 1, stats, rent, goal, goalMet, bonus, wages);
+  if (goalMet) game.ui.toast(`🎯 Daily goal hit! Bonus +$${bonus}`, "good");
   if (s.cash < 0) game.ui.toast("⚠️ You're in the red — sell hard tomorrow!", "bad");
+  game.checkAchievements();
   game.save();
 }
 
@@ -208,6 +346,9 @@ function init() {
 
   for (let i = 0; i < game.state.tanksOwned; i++) game.addTankUnit(true);
   for (let i = 0; i < game.state.shelvesOwned; i++) game.addShelfUnit(true);
+
+  // restore hired staff figures
+  for (const def of STAFF) if (game.state.staff[def.id]) game.spawnStaffMesh(def.id, def);
 
   // restore boxes lying around
   const savedBoxes = game.state.boxes;
@@ -285,6 +426,7 @@ function loop(now) {
     if (atc) { if (game.checkout.customer !== atc) game.checkout.present(atc); }
     else if (game.checkout.customer) game.checkout.clear();
     game.checkout.update(dt);
+    updateStaff(dt);
     for (const t of game.tankUnits) t.update(dt);
   }
 

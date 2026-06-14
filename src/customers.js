@@ -18,6 +18,7 @@ class Customer {
     this.cart = [];              // [{ id, label, price, scanned }]
     this.mesh = createCustomerMesh();
     this.mesh.position.set(SPAWN.x + (Math.random() - 0.5) * 1.5, 0, SPAWN.z);
+    this.limbs = this.mesh.userData.limbs;
     game.scene.add(this.mesh);
     this.state = "walk";
     this.path = [{ x: DOOR_IN.x, z: DOOR_IN.z }];
@@ -37,6 +38,13 @@ class Customer {
     path.push({ x: AISLE_X, z });
     path.push({ x, z });
     this.path = path;
+    this.state = "walk";
+  }
+
+  // Direct walk (no aisle detour) — used for shuffling forward in the queue,
+  // which is a straight column at x = 3.3.
+  routeStraight(x, z) {
+    this.path = [{ x, z }];
     this.state = "walk";
   }
 
@@ -158,6 +166,16 @@ class Customer {
     this.leave();
   }
 
+  animateLimbs(swing, dt) {
+    const L = this.limbs;
+    if (!L) return;
+    const ease = (cur, to) => cur + (to - cur) * Math.min(1, dt * 10);
+    L.legL.rotation.x = ease(L.legL.rotation.x, swing);
+    L.legR.rotation.x = ease(L.legR.rotation.x, -swing);
+    L.armL.rotation.x = ease(L.armL.rotation.x, -swing);
+    L.armR.rotation.x = ease(L.armR.rotation.x, swing);
+  }
+
   update(dt) {
     const p = this.mesh.position;
 
@@ -175,9 +193,11 @@ class Customer {
         this.mesh.rotation.y = Math.atan2(dx, dz);
         this.walkPhase += dt * 9;
         p.y = Math.abs(Math.sin(this.walkPhase)) * 0.045;
+        this.animateLimbs(Math.sin(this.walkPhase) * 0.6, dt);
       }
     } else {
       p.y *= 0.8;
+      this.animateLimbs(0, dt); // ease limbs back to rest when standing
     }
 
     if (this.state === "browse") {
@@ -256,10 +276,10 @@ export class CustomerManager {
     this.queue.forEach((c, i) => {
       c.queueIndex = i;
       const spot = QUEUE_SPOTS[Math.min(i, QUEUE_SPOTS.length - 1)];
-      if (c.state === "queue" || c.state === "atCounter") {
-        c.routeTo(spot.x, spot.z);
+      // step straight forward in the column — no detour through the aisle
+      if (c.state === "queue" || c.state === "atCounter" || c.state === "walk") {
+        c.routeStraight(spot.x, spot.z);
         c.onArrive = () => { c.state = "queue"; };
-        if (i > 0) c.state = "walk";
       }
     });
   }
@@ -284,10 +304,13 @@ export class CustomerManager {
     if (!customer.cart.every((i) => i.scanned)) return;
     const total = customer.cart.reduce((s, i) => s + i.price, 0);
     g.state.cash += total;
-    g.addXP(total);
     g.state.stats.revenue += total;
     g.state.stats.sold += customer.cart.length;
     g.state.stats.served++;
+    g.state.lifetime.revenue += total;
+    g.state.lifetime.sold += customer.cart.length;
+    g.state.lifetime.served++;
+    g.addXP(total); // also runs achievement checks
     g.sound.chaching();
     g.ui.toast(`💰 Sale: $${total}`, "good");
     customer.cart = [];

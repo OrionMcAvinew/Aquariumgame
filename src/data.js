@@ -19,14 +19,14 @@ export const DELIVERY_TIME = 18;      // seconds for an order to arrive
 //   pattern2   secondary pattern color
 //   tail       'fan'|'fork'|'sword'|'round'|'spiky'|'seahorse'
 export const FISH = [
-  { id: "guppy",     name: "Guppy",        kind: "fish", boxSize: 4, boxCost: 8,   market: 6,   level: 1, color: 0xff8c42, fin: 0xffd166, size: 0.8,  bodyH: 0.40, pattern: "spots",   pattern2: 0xffe08a, tail: "fan" },
+  { id: "guppy",     name: "Guppy",        kind: "fish", boxSize: 4, boxCost: 8,   market: 6,   level: 1, color: 0xff8c42, fin: 0xffd166, size: 0.8,  bodyH: 0.40, pattern: "spots",   pattern2: 0xffe08a, school: true, tail: "fan" },
   { id: "goldfish",  name: "Goldfish",     kind: "fish", boxSize: 4, boxCost: 12,  market: 9,   level: 1, color: 0xffb703, fin: 0xff8800, size: 1.0,  bodyH: 0.46, pattern: "solid",   pattern2: 0xffd166, tail: "fan" },
-  { id: "danio",     name: "Zebra Danio",  kind: "fish", boxSize: 4, boxCost: 10,  market: 8,   level: 1, color: 0xd7dde2, fin: 0x355070, size: 0.8,  bodyH: 0.34, pattern: "zebra",   pattern2: 0x1d3557, tail: "fork" },
-  { id: "platy",     name: "Platy",        kind: "fish", boxSize: 4, boxCost: 9,   market: 7,   level: 1, color: 0xff5a36, fin: 0xffa62b, size: 0.78, bodyH: 0.42, pattern: "solid",   pattern2: 0xffa62b, tail: "fan" },
+  { id: "danio",     name: "Zebra Danio",  kind: "fish", boxSize: 4, boxCost: 10,  market: 8,   level: 1, color: 0xd7dde2, fin: 0x355070, size: 0.8,  bodyH: 0.34, pattern: "zebra",   pattern2: 0x1d3557, school: true, tail: "fork" },
+  { id: "platy",     name: "Platy",        kind: "fish", boxSize: 4, boxCost: 9,   market: 7,   level: 1, color: 0xff5a36, fin: 0xffa62b, size: 0.78, bodyH: 0.42, pattern: "solid",   pattern2: 0xffa62b, school: true, tail: "fan" },
   { id: "molly",     name: "Black Molly",  kind: "fish", boxSize: 4, boxCost: 14,  market: 10,  level: 2, color: 0x2b2d42, fin: 0x5c677d, size: 0.9,  bodyH: 0.42, pattern: "solid",   pattern2: 0x5c677d, tail: "fan" },
-  { id: "tetra",     name: "Neon Tetra",   kind: "fish", boxSize: 4, boxCost: 16,  market: 12,  level: 2, color: 0xd9eef5, fin: 0xf72585, size: 0.7,  bodyH: 0.36, pattern: "hstripe", pattern2: 0x00b4d8, tail: "fork" },
+  { id: "tetra",     name: "Neon Tetra",   kind: "fish", boxSize: 4, boxCost: 16,  market: 12,  level: 2, color: 0xd9eef5, fin: 0xf72585, size: 0.7,  bodyH: 0.36, pattern: "hstripe", pattern2: 0x00b4d8, school: true, tail: "fork" },
   { id: "cory",      name: "Corydoras",    kind: "fish", boxSize: 4, boxCost: 15,  market: 11,  level: 2, color: 0xc2a37a, fin: 0x6f4518, size: 0.8,  bodyH: 0.38, pattern: "spots",   pattern2: 0x3a2410, tail: "fan" },
-  { id: "rasbora",   name: "Rasbora",      kind: "fish", boxSize: 4, boxCost: 17,  market: 13,  level: 2, color: 0xd98c5f, fin: 0x432818, size: 0.72, bodyH: 0.36, pattern: "hstripe", pattern2: 0x2b2d42, tail: "fork" },
+  { id: "rasbora",   name: "Rasbora",      kind: "fish", boxSize: 4, boxCost: 17,  market: 13,  level: 2, color: 0xd98c5f, fin: 0x432818, size: 0.72, bodyH: 0.36, pattern: "hstripe", pattern2: 0x2b2d42, school: true, tail: "fork" },
   { id: "swordtail", name: "Swordtail",    kind: "fish", boxSize: 4, boxCost: 20,  market: 15,  level: 3, color: 0xef233c, fin: 0xff758f, size: 0.9,  bodyH: 0.40, pattern: "solid",   pattern2: 0xff758f, tail: "sword" },
   { id: "betta",     name: "Betta",        kind: "fish", boxSize: 2, boxCost: 28,  market: 20,  level: 3, color: 0xb5179e, fin: 0x7209b7, size: 0.95, bodyH: 0.50, pattern: "gradient",pattern2: 0x3a0ca3, tail: "fan" },
   { id: "rainbow",   name: "Rainbowfish",  kind: "fish", boxSize: 4, boxCost: 26,  market: 19,  level: 4, color: 0x4cc9f0, fin: 0xf72585, size: 0.85, bodyH: 0.42, pattern: "rainbow", pattern2: 0x06d6a0, tail: "fork" },
@@ -73,6 +73,29 @@ export const PRODUCTS = [
 
 export const CATALOG = [...FISH, ...PRODUCTS];
 const byId = new Map(CATALOG.map((c) => [c.id, c]));
+
+// Achievements — test(state) checks lifetime counters + current state.
+export const ACHIEVEMENTS = [
+  { id: "first_sale", name: "First Sale",       desc: "Sell your first item",        test: (s) => s.lifetime.sold >= 1 },
+  { id: "sold_50",    name: "Fishmonger",       desc: "Sell 50 items",               test: (s) => s.lifetime.sold >= 50 },
+  { id: "sold_250",   name: "Aquatic Empire",   desc: "Sell 250 items",              test: (s) => s.lifetime.sold >= 250 },
+  { id: "served_100", name: "People Person",    desc: "Serve 100 customers",         test: (s) => s.lifetime.served >= 100 },
+  { id: "cash_2000",  name: "In the Money",     desc: "Hold $2,000 at once",         test: (s) => s.cash >= 2000 },
+  { id: "cash_10000", name: "Tycoon",           desc: "Hold $10,000 at once",        test: (s) => s.cash >= 10000 },
+  { id: "level_5",    name: "Established",      desc: "Reach level 5",               test: (s) => s.level >= 5 },
+  { id: "level_9",    name: "Master Aquarist",  desc: "Reach the top level",         test: (s) => s.level >= 9 },
+  { id: "tanks_8",    name: "Full House",       desc: "Own all 8 tanks",             test: (s) => s.tanksOwned >= 8 },
+  { id: "shelves_8",  name: "Fully Stocked",    desc: "Own all 8 shelves",           test: (s) => s.shelvesOwned >= 8 },
+  { id: "day_7",      name: "Open for Business",desc: "Reach day 7",                 test: (s) => s.day >= 7 },
+  { id: "goal_5",     name: "Overachiever",     desc: "Hit the daily goal 5 times",  test: (s) => s.lifetime.goals >= 5 },
+];
+
+// Hireable staff — one-time hire cost + a daily wage deducted at closing.
+export const STAFF = [
+  { id: "cashier",  name: "Cashier",  emoji: "🧑‍💼", uniform: 0x2a9d8f, hire: 400, wage: 80, desc: "Scans and rings up the queue for you" },
+  { id: "aquarist", name: "Aquarist", emoji: "🧑‍🔧", uniform: 0x457b9d, hire: 300, wage: 55, desc: "Keeps every tank fed and clean" },
+  { id: "stocker",  name: "Stocker",  emoji: "🧑‍🏭", uniform: 0xf4a261, hire: 300, wage: 60, desc: "Unpacks delivered boxes onto tanks & shelves" },
+];
 export const item = (id) => byId.get(id);
 
 // Cumulative XP needed to reach a level (1 XP per $1 of sales).
