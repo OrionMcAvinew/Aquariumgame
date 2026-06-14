@@ -506,34 +506,102 @@ function drawPattern(ctx, w, h, cx, cy, bh, len, sp) {
   }
 }
 
+// per-shape body proportions + fin style so each species reads distinctly
+const FISH_SHAPE = {
+  normal:   { lenK: 1.0,  bhK: 1.0,  nose: 0.5,  fin: "normal" },
+  round:    { lenK: 0.82, bhK: 1.22, nose: 0.42, fin: "fan" },
+  tall:     { lenK: 0.78, bhK: 1.0,  nose: 0.44, fin: "tall" },
+  long:     { lenK: 1.32, bhK: 0.82, nose: 0.5,  fin: "small" },
+  tetra:    { lenK: 1.05, bhK: 0.92, nose: 0.5,  fin: "small" },
+  betta:    { lenK: 0.86, bhK: 1.0,  nose: 0.46, fin: "betta" },
+  lionfish: { lenK: 0.95, bhK: 1.05, nose: 0.48, fin: "lion" },
+};
+
 function drawFish(ctx, w, h, sp) {
+  const S = FISH_SHAPE[sp.shape] || FISH_SHAPE.normal;
   const cx = w * 0.46, cy = h * 0.5;
-  const len = w * 0.74, bh = h * (sp.bodyH || 0.42);
-  const noseX = cx + len * 0.5, backX = cx - len * 0.5;
+  const len = w * 0.7 * S.lenK, bh = h * (sp.bodyH || 0.42) * S.bhK;
+  const noseX = cx + len * S.nose, backX = cx - len * 0.5;
+  const finCol = cssOf(sp.fin, 0.9);
+  const finSoft = cssOf(sp.fin, 0.55);
 
-  // fins behind body
-  ctx.fillStyle = cssOf(sp.fin, 0.9);
-  ctx.beginPath(); // dorsal
-  ctx.moveTo(cx - bh * 0.2, cy - bh * 0.5);
-  ctx.lineTo(cx + len * 0.05, cy - bh * 1.0);
-  ctx.lineTo(cx + len * 0.2, cy - bh * 0.5);
-  ctx.closePath(); ctx.fill();
-  ctx.beginPath(); // pelvic
-  ctx.moveTo(cx, cy + bh * 0.45);
-  ctx.lineTo(cx + len * 0.02, cy + bh * 0.98);
-  ctx.lineTo(cx + len * 0.18, cy + bh * 0.5);
-  ctx.closePath(); ctx.fill();
-  ctx.beginPath(); // pectoral
-  ctx.ellipse(noseX - len * 0.24, cy + bh * 0.28, len * 0.1, bh * 0.3, -0.5, 0, Math.PI * 2);
-  ctx.fill();
+  // ---- fins (drawn behind the body) ----
+  ctx.fillStyle = finCol;
+  if (S.fin === "betta") {
+    ctx.fillStyle = finSoft;
+    ctx.beginPath(); // sweeping dorsal
+    ctx.moveTo(backX + len * 0.1, cy - bh * 0.4);
+    ctx.quadraticCurveTo(cx - len * 0.1, cy - bh * 2.0, noseX - len * 0.25, cy - bh * 0.5);
+    ctx.quadraticCurveTo(cx, cy - bh * 0.8, backX + len * 0.1, cy - bh * 0.4);
+    ctx.fill();
+    ctx.beginPath(); // sweeping anal fin
+    ctx.moveTo(backX + len * 0.12, cy + bh * 0.4);
+    ctx.quadraticCurveTo(cx - len * 0.05, cy + bh * 2.1, noseX - len * 0.3, cy + bh * 0.5);
+    ctx.quadraticCurveTo(cx, cy + bh * 0.9, backX + len * 0.12, cy + bh * 0.4);
+    ctx.fill();
+  } else if (S.fin === "tall") {
+    ctx.beginPath(); // tall dorsal
+    ctx.moveTo(cx - len * 0.18, cy - bh * 0.55);
+    ctx.lineTo(cx + len * 0.02, cy - bh * 1.6);
+    ctx.lineTo(cx + len * 0.32, cy - bh * 0.5);
+    ctx.closePath(); ctx.fill();
+    ctx.beginPath(); // tall anal
+    ctx.moveTo(cx - len * 0.12, cy + bh * 0.55);
+    ctx.lineTo(cx + len * 0.04, cy + bh * 1.55);
+    ctx.lineTo(cx + len * 0.3, cy + bh * 0.5);
+    ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = finCol; ctx.lineWidth = h * 0.018; ctx.lineCap = "round";
+    ctx.beginPath(); ctx.moveTo(cx + len * 0.05, cy + bh * 0.7); ctx.lineTo(cx - len * 0.02, cy + bh * 2.0); ctx.stroke();
+  } else if (S.fin === "lion") {
+    ctx.strokeStyle = finCol; ctx.lineCap = "round";
+    for (let i = 0; i < 15; i++) {
+      const a = (i / 15) * Math.PI * 2;
+      const r2 = bh * (1.35 + (i % 2) * 0.4);
+      ctx.lineWidth = h * 0.02;
+      ctx.beginPath();
+      ctx.moveTo(cx + Math.cos(a) * bh * 0.55, cy + Math.sin(a) * bh * 0.5);
+      ctx.lineTo(cx + Math.cos(a) * r2, cy + Math.sin(a) * r2 * 0.85);
+      ctx.stroke();
+    }
+    ctx.strokeStyle = cssOf(sp.pattern2 || 0xffffff, 0.7); ctx.lineWidth = h * 0.008;
+    for (let i = 0; i < 15; i++) {
+      const a = (i / 15) * Math.PI * 2;
+      ctx.beginPath();
+      ctx.moveTo(cx + Math.cos(a) * bh * 0.85, cy + Math.sin(a) * bh * 0.75);
+      ctx.lineTo(cx + Math.cos(a) * bh * 1.25, cy + Math.sin(a) * bh * 1.1);
+      ctx.stroke();
+    }
+  } else if (S.fin === "fan") {
+    ctx.beginPath();
+    ctx.moveTo(cx - len * 0.2, cy - bh * 0.55);
+    ctx.quadraticCurveTo(cx, cy - bh * 1.15, cx + len * 0.22, cy - bh * 0.5);
+    ctx.closePath(); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(noseX - len * 0.28, cy + bh * 0.3, len * 0.12, bh * 0.32, -0.5, 0, Math.PI * 2); ctx.fill();
+  } else if (S.fin === "small") {
+    ctx.beginPath();
+    ctx.moveTo(cx - bh * 0.1, cy - bh * 0.45);
+    ctx.lineTo(cx + len * 0.08, cy - bh * 0.85);
+    ctx.lineTo(cx + len * 0.22, cy - bh * 0.45);
+    ctx.closePath(); ctx.fill();
+  } else { // normal: dorsal + pelvic + pectoral
+    ctx.beginPath();
+    ctx.moveTo(cx - bh * 0.2, cy - bh * 0.5); ctx.lineTo(cx + len * 0.05, cy - bh * 1.05); ctx.lineTo(cx + len * 0.2, cy - bh * 0.5);
+    ctx.closePath(); ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(cx, cy + bh * 0.45); ctx.lineTo(cx + len * 0.02, cy + bh * 0.98); ctx.lineTo(cx + len * 0.18, cy + bh * 0.5);
+    ctx.closePath(); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(noseX - len * 0.24, cy + bh * 0.28, len * 0.1, bh * 0.3, -0.5, 0, Math.PI * 2); ctx.fill();
+  }
 
-  // body silhouette
+  // ---- body silhouette (rounder head for round/tall bodies) ----
+  const round = sp.shape === "round" || sp.shape === "tall";
   const bodyPath = () => {
     ctx.beginPath();
-    ctx.moveTo(noseX, cy);
-    ctx.quadraticCurveTo(cx, cy - bh, backX, cy - bh * 0.4);
+    ctx.moveTo(noseX, cy - (round ? bh * 0.12 : 0));
+    ctx.quadraticCurveTo(cx + len * (round ? 0.1 : 0), cy - bh, backX, cy - bh * 0.4);
     ctx.quadraticCurveTo(backX - len * 0.05, cy, backX, cy + bh * 0.4);
-    ctx.quadraticCurveTo(cx, cy + bh, noseX, cy);
+    ctx.quadraticCurveTo(cx + len * (round ? 0.1 : 0), cy + bh, noseX, cy + (round ? bh * 0.12 : 0));
+    if (round) ctx.quadraticCurveTo(noseX + len * 0.06, cy, noseX, cy - bh * 0.12);
     ctx.closePath();
   };
   bodyPath();
@@ -553,7 +621,7 @@ function drawFish(ctx, w, h, sp) {
   ctx.moveTo(noseX - len * 0.2, cy - bh * 0.5);
   ctx.quadraticCurveTo(noseX - len * 0.3, cy, noseX - len * 0.2, cy + bh * 0.5);
   ctx.lineWidth = Math.max(1, h * 0.012); ctx.strokeStyle = darkenCss(sp.color, 0.28); ctx.stroke();
-  const ex = noseX - len * 0.13, ey = cy - bh * 0.12, er = Math.max(3, bh * 0.17);
+  const ex = noseX - len * 0.14, ey = cy - bh * 0.12, er = Math.max(3, bh * 0.16);
   ctx.beginPath(); ctx.arc(ex, ey, er, 0, Math.PI * 2); ctx.fillStyle = "#fff"; ctx.fill();
   ctx.beginPath(); ctx.arc(ex + er * 0.2, ey, er * 0.55, 0, Math.PI * 2); ctx.fillStyle = "#111"; ctx.fill();
   ctx.beginPath(); ctx.arc(ex - er * 0.15, ey - er * 0.25, er * 0.2, 0, Math.PI * 2); ctx.fillStyle = "#fff"; ctx.fill();
@@ -587,14 +655,16 @@ function drawSeahorse(ctx, w, h, sp) {
   ctx.restore();
 }
 
-// True when a real Kenney sprite is available for this species.
+// Use species-shaped procedural art so every fish reads as its own species.
+// (Kenney sprites reused too few silhouettes.) Sprites stay as a safety net.
+const USE_SPRITES = false;
 function hasSprite(sp) {
   const m = SPRITE_MAP[sp.id];
-  return !!(m && FISH_IMG[m.base]) && sp.tail !== "seahorse";
+  return USE_SPRITES && !!(m && FISH_IMG[m.base]) && sp.tail !== "seahorse";
 }
 
 const fishTexCache = new Map();
-function fishTexture(sp) {
+export function fishTexture(sp) {
   if (fishTexCache.has(sp.id)) return fishTexCache.get(sp.id);
 
   // Preferred path: recolored Kenney sprite (already includes fins + tail).
@@ -677,7 +747,9 @@ function tailTexture(sp) {
 }
 
 function spriteMat(tex) {
-  return new THREE.MeshLambertMaterial({
+  // unlit: the painted texture already has its shading, so this keeps the
+  // fish vivid and readable instead of desaturating under the room lighting.
+  return new THREE.MeshBasicMaterial({
     map: tex, transparent: true, alphaTest: 0.5, side: THREE.DoubleSide,
   });
 }
@@ -700,12 +772,15 @@ function buildFishMesh(sp, scale = 1) {
   group.add(pA, pB);
 
   // Procedural fish get a separate wiggling tail; sprites already include it.
+  // Flowing tails (betta / fancy goldfish) are larger.
+  const TAIL_SCALE = { betta: 1.7, round: 1.45, lionfish: 1.3, tall: 1.0, long: 0.9, tetra: 0.9 };
   let tail = null;
   if (!sprite && !seahorse) {
     const tmat = spriteMat(tailTexture(sp));
     tail = new THREE.Group();
     tail.position.x = -W * 0.46;
-    const tW = W * 0.55, tH = H * 1.2;
+    const ts = TAIL_SCALE[sp.shape] || 1.0;
+    const tW = W * 0.55 * ts, tH = H * 1.2 * ts;
     const t1 = new THREE.Mesh(new THREE.PlaneGeometry(tW, tH), tmat);
     t1.position.x = -tW * 0.46;
     const t2 = t1.clone(); t2.rotation.y = Math.PI / 2;
@@ -719,13 +794,14 @@ function buildFishMesh(sp, scale = 1) {
 
 /* ---------------- Coral library ---------------- */
 
+// vivid neon reef-coral colours (like a live coral sales tank under actinics)
 const CORAL_PALETTE = [
-  0xff6b6b, 0xff7b54, 0xffa62b, 0xf9c74f, 0xf15bb5,
-  0xc77dff, 0x9b5de5, 0x00bbf9, 0x00f5d4, 0x4ecdc4, 0xff4d6d,
+  0xff206e, 0xff5d00, 0xffd400, 0x05ffa1, 0x00e5ff,
+  0x7c1fff, 0xff00a0, 0x7cff00, 0x00ffd0, 0xff3860, 0x39ff14,
 ];
 
 // emissive coral material so reefs glow under the tank light
-function coralMat(color, emiss = 0.3) {
+function coralMat(color, emiss = 0.5) {
   const m = new THREE.MeshLambertMaterial({ color });
   m.emissive = new THREE.Color(color).multiplyScalar(emiss);
   return m;
@@ -1118,7 +1194,7 @@ export class TankUnit {
       (c) => buildMushroom(c, r),
       (c) => buildPillar(c, r),
     ];
-    const n = 3 + Math.floor(r() * 2);
+    const n = 4 + Math.floor(r() * 3);
     const used = [];
     for (let i = 0; i < n; i++) {
       // avoid repeating the same coral type twice in a row
