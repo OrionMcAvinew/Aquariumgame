@@ -91,11 +91,16 @@ function loadState() {
 }
 
 game.save = () => {
+  if (game._resetting) return; // don't re-save while resetting
   try { localStorage.setItem(SAVE_KEY, serialize()); } catch { /* no storage */ }
 };
 
 game.resetGame = () => {
-  localStorage.removeItem(SAVE_KEY);
+  // stop autosave + the beforeunload save, otherwise the reload re-writes the
+  // current state right after we clear it (which is why reset "did nothing").
+  game._resetting = true;
+  clearInterval(game._saveTimer);
+  try { localStorage.removeItem(SAVE_KEY); } catch { /* no storage */ }
   location.reload();
 };
 
@@ -411,7 +416,7 @@ function init() {
     game.renderer.setSize(innerWidth, innerHeight);
     game.composer?.setSize(innerWidth, innerHeight);
   });
-  setInterval(game.save, 10000);
+  game._saveTimer = setInterval(game.save, 10000);
   addEventListener("beforeunload", game.save);
 
   window.game = game; // console access for debugging
