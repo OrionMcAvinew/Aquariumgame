@@ -3,7 +3,7 @@
 import {
   CATALOG, item, xpForLevel, MAX_LEVEL, DAY_LEN, QUEUE_PATIENCE,
   tankPrice, shelfPrice, MAX_TANK_SLOTS, MAX_SHELF_SLOTS, DELIVERY_TIME,
-  ACHIEVEMENTS, STAFF,
+  ACHIEVEMENTS, STAFF, fragRackPrice, MAX_FRAGRACK_SLOTS,
 } from "./data.js";
 
 const $ = (id) => document.getElementById(id);
@@ -150,7 +150,7 @@ export class UI {
         lastKind = it.kind;
         const head = document.createElement("div");
         head.className = "order-section";
-        head.textContent = it.kind === "fish" ? "🐟 Live Fish" : "🧰 Supplies";
+        head.textContent = it.kind === "fish" ? "🐟 Live Fish" : it.kind === "coral" ? "🪸 Coral Frags" : "🧰 Supplies";
         list.appendChild(head);
       }
       const row = document.createElement("div");
@@ -271,6 +271,15 @@ export class UI {
         g.addShelfUnit();
         this.toast("🗄️ New shelf installed!", "good");
         g.checkAchievements();
+        this.showTab("store");
+        g.save();
+      });
+    const frCost = s.fragRacksOwned < MAX_FRAGRACK_SLOTS ? fragRackPrice(s.fragRacksOwned) : null;
+    make(`🪸 Coral frag rack (${s.fragRacksOwned}/${MAX_FRAGRACK_SLOTS})`, "3-tier reef rack · holds 18 frags",
+      frCost, frCost !== null && s.cash >= frCost, () => {
+        s.cash -= frCost; s.stats.spent += frCost;
+        g.addFragRackUnit();
+        this.toast("🪸 New frag rack installed!", "good");
         this.showTab("store");
         g.save();
       });

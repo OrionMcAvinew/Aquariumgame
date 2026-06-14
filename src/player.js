@@ -1,7 +1,7 @@
 // First-person controls: keyboard/mouse on desktop, twin-zone touch on mobile.
 // Also owns the interaction raycast and the carried-box logic.
 import * as THREE from "three";
-import { item, TANK_FISH_CAP, ROW_CAP } from "./data.js";
+import { item, TANK_FISH_CAP, ROW_CAP, FRAG_CAP } from "./data.js";
 
 const EYE = 1.65;
 const RADIUS = 0.34;
@@ -203,6 +203,17 @@ export class Player {
         if (this.carry && item(this.carry.itemId).kind === "product") {
           found = { type: "stock-shelf", unit: info.unit, shelfIdx: ownedIdx, label: `Stock ${item(this.carry.itemId).name}` };
         }
+      } else if (info.type === "fragrack") {
+        const ownedIdx = g.fragRackUnits.indexOf(info.unit);
+        if (ownedIdx === -1) continue;
+        const rk = g.state.fragRacks[ownedIdx];
+        if (this.carry && item(this.carry.itemId).kind === "coral") {
+          found = rk.frags.length < FRAG_CAP
+            ? { type: "stock-frag", unit: info.unit, rackIdx: ownedIdx, label: `Place ${item(this.carry.itemId).name} ×${Math.min(FRAG_CAP - rk.frags.length, this.carry.count)}` }
+            : { type: "none", label: "Frag rack is full" };
+        } else if (!this.carry) {
+          found = { type: "none", label: `Frag rack · ${rk.frags.length}/${FRAG_CAP} frags` };
+        }
       } else if (info.type === "scanItem") {
         if (!info.entry.scanned) {
           const it = item(info.entry.id);
@@ -273,6 +284,16 @@ export class Player {
       t.unit.setCare(100);
       g.sound.splash();
       g.ui.toast("✨ Tank fed and cleaned");
+      g.save();
+    } else if (t.type === "stock-frag") {
+      const rk = g.state.fragRacks[t.rackIdx];
+      const n = Math.min(this.carry.count, FRAG_CAP - rk.frags.length);
+      for (let i = 0; i < n; i++) rk.frags.push(this.carry.itemId);
+      this.carry.count -= n;
+      t.unit.syncFrags(rk.frags);
+      g.sound.splash();
+      g.ui.toast(`🪸 ${n} ${item(this.carry.itemId).name} placed in the frag rack`);
+      if (this.carry.count <= 0) this.discardCarried();
       g.save();
     } else if (t.type === "scanItem") {
       t.checkout.scan(t.entry);

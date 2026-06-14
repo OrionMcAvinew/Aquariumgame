@@ -3,8 +3,9 @@ import * as THREE from "three";
 import {
   CATALOG, item, DAY_LEN, CARE_DECAY_PER_DAY, xpForLevel, MAX_LEVEL,
   PALLET, REGISTER_ZONE, SHELF_ROWS, TANK_FISH_CAP, ROW_CAP, ACHIEVEMENTS, STAFF,
+  FRAG_CAP,
 } from "./data.js";
-import { buildRoom, TankUnit, ShelfUnit, createBoxMesh, loadFishAssets, Checkout, createCustomerMesh, FeatureTank } from "./world.js";
+import { buildRoom, TankUnit, ShelfUnit, createBoxMesh, loadFishAssets, Checkout, createCustomerMesh, FeatureTank, FragRack } from "./world.js";
 import { RoomEnvironment } from "../lib/jsm/RoomEnvironment.js";
 import { EffectComposer } from "../lib/jsm/postprocessing/EffectComposer.js";
 import { RenderPass } from "../lib/jsm/postprocessing/RenderPass.js";
@@ -20,7 +21,7 @@ const SAVE_KEY = "finfortune3d-save-v1";
 const game = {
   scene: null, camera: null, renderer: null,
   colliders: [], interactables: [],
-  tankUnits: [], shelfUnits: [],
+  tankUnits: [], shelfUnits: [], fragRackUnits: [],
   state: null, paused: false,
   layout: { REGISTER_ZONE },
 };
@@ -35,12 +36,13 @@ function defaultState() {
   for (const c of CATALOG) prices[c.id] = c.market;
   return {
     cash: 300, day: 1, time: 0, level: 1, xp: 0, goal: goalFor(1, 1),
-    tanksOwned: 2, shelvesOwned: 1,
+    tanksOwned: 2, shelvesOwned: 1, fragRacksOwned: 1,
     tanks: [
       { fish: ["guppy", "guppy", "guppy", "guppy"], care: 100 },
       { fish: [], care: 100 },
     ],
     shelves: [{ rows: emptyRows() }],
+    fragRacks: [{ frags: ["zoa", "mushroom", "duncan", "acan", "zoa", "torch"] }],
     prices,
     orders: [],   // { itemId, count, eta }
     boxes: [],    // { itemId, count, x, z } (+ mesh at runtime)
@@ -80,6 +82,8 @@ function loadState() {
     s.lifetime = { sold: 0, served: 0, revenue: 0, goals: 0, ...d.lifetime };
     s.achievements = d.achievements || [];
     s.staff = { cashier: false, aquarist: false, stocker: false, ...d.staff };
+    s.fragRacksOwned = d.fragRacksOwned ?? 1;
+    s.fragRacks = d.fragRacks || [{ frags: [] }];
     return s;
   } catch {
     return null;
@@ -169,6 +173,13 @@ game.autoStock = () => {
     for (let i = 0; i < n; i++) s.tanks[ti].fish.push(box.itemId);
     box.count -= n;
     game.tankUnits[ti].syncFish(s.tanks[ti].fish);
+  } else if (it.kind === "coral") {
+    const ri = s.fragRacks.findIndex((rk) => rk.frags.length < FRAG_CAP);
+    if (ri === -1) return;
+    const n = Math.min(box.count, FRAG_CAP - s.fragRacks[ri].frags.length);
+    for (let i = 0; i < n; i++) s.fragRacks[ri].frags.push(box.itemId);
+    box.count -= n;
+    game.fragRackUnits[ri].syncFrags(s.fragRacks[ri].frags);
   } else {
     let moved = 0;
     for (const [si, shelf] of s.shelves.entries()) {
@@ -246,6 +257,16 @@ game.addShelfUnit = (initial = false) => {
   if (!initial) game.state.shelvesOwned = game.shelfUnits.length;
   if (!game.state.shelves[idx]) game.state.shelves[idx] = { rows: emptyRows() };
   unit.syncStock(game.state.shelves[idx].rows);
+};
+
+game.addFragRackUnit = (initial = false) => {
+  const idx = game.fragRackUnits.length;
+  const unit = new FragRack(game.scene, game.colliders, idx);
+  game.fragRackUnits.push(unit);
+  game.interactables.push(unit.hit);
+  if (!initial) game.state.fragRacksOwned = game.fragRackUnits.length;
+  if (!game.state.fragRacks[idx]) game.state.fragRacks[idx] = { frags: [] };
+  unit.syncFrags(game.state.fragRacks[idx].frags);
 };
 
 game.spawnBox = (itemId, count, pos, existingMesh = null) => {
@@ -370,6 +391,7 @@ function init() {
 
   for (let i = 0; i < game.state.tanksOwned; i++) game.addTankUnit(true);
   for (let i = 0; i < game.state.shelvesOwned; i++) game.addShelfUnit(true);
+  for (let i = 0; i < game.state.fragRacksOwned; i++) game.addFragRackUnit(true);
 
   // restore hired staff figures
   for (const def of STAFF) if (game.state.staff[def.id]) game.spawnStaffMesh(def.id, def);

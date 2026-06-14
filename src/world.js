@@ -3,7 +3,7 @@ import * as THREE from "three";
 import { RoundedBoxGeometry } from "../lib/jsm/RoundedBoxGeometry.js";
 import {
   STORE, TANK_SLOTS, SHELF_SLOTS, COUNTER, PALLET,
-  SHELF_ROWS, ROW_CAP, item, FISH,
+  SHELF_ROWS, ROW_CAP, item, FISH, FRAGRACK_SLOTS,
 } from "./data.js";
 
 // PBR material so surfaces pick up the room environment (reflections, softer
@@ -1142,6 +1142,10 @@ export class TankUnit {
     const strip = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.025, 0.5),
       new THREE.MeshBasicMaterial({ color: new THREE.Color(0xf4fcff).multiplyScalar(1.4) }));
     strip.position.y = MAIN_Y + MAIN_H - 0.02;
+    // actinic accent bar at the front of the hood (reef-light look)
+    const actinic = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.02, 0.06),
+      new THREE.MeshBasicMaterial({ color: new THREE.Color(0x6a3df0).multiplyScalar(1.3) }));
+    actinic.position.set(0, MAIN_Y + MAIN_H - 0.02, 0.28);
 
     // shimmering water surface near the top of the tank
     this.surfaceMat = new THREE.MeshBasicMaterial({
@@ -1159,7 +1163,7 @@ export class TankUnit {
     highlight.position.set(-0.45, MAIN_Y + MAIN_H / 2, 0.36);
     highlight.rotation.z = 0.5;
 
-    this.group.add(cabinet, kick, cabTrim, glow, this.water, this.glass, gravel, hood, strip, surface, highlight);
+    this.group.add(cabinet, kick, cabTrim, glow, this.water, this.glass, gravel, hood, strip, actinic, surface, highlight);
 
     // upper decorative display tank (ambient fish, pure vibes)
     const decoH = 0.5;
@@ -1635,7 +1639,7 @@ function boxLabelTexture(itemId) {
     ctx.textAlign = "center";
     ctx.fillText(it.name.toUpperCase(), 128, 32);
     ctx.fillStyle = "#fff";
-    ctx.fillText(it.kind === "fish" ? "LIVE FISH" : "SUPPLIES", 128, 74);
+    ctx.fillText(it.kind === "fish" ? "LIVE FISH" : it.kind === "coral" ? "LIVE CORAL" : "SUPPLIES", 128, 74);
   }, 256, 128);
   labelCache.set(itemId, tex);
   return tex;
@@ -1785,7 +1789,9 @@ export class Checkout {
     cart.forEach((entry, i) => {
       entry.scanned = false;
       const it = item(entry.id);
-      const mesh = it.kind === "fish" ? buildFishBag(it) : (() => { const m = productMesh(it); m.scale.setScalar(1.15); return m; })();
+      const mesh = it.kind === "fish" ? buildFishBag(it)
+        : it.kind === "coral" ? (() => { const m = buildFragMesh(it); m.scale.setScalar(1.6); return m; })()
+        : (() => { const m = productMesh(it); m.scale.setScalar(1.15); return m; })();
       const slot = this._incoming(i, n);
       mesh.position.set(slot.x, COUNTER.h + 0.05, slot.z);
       mesh.rotation.y = (i % 2 ? 0.3 : -0.3);
@@ -1966,5 +1972,120 @@ export class FeatureTank {
       f.group.rotation.y = Math.atan2(-vz, vx);
       if (f.tail) f.tail.rotation.y = Math.sin(this.time * 8 + f.phase) * 0.5;
     }
+  }
+}
+
+/* ---------------- Coral frag rack (reefing rack of frag tanks) ---------------- */
+
+// a single coral frag on a plug, by growth form
+export function buildFragMesh(coral) {
+  const g = new THREE.Group();
+  const plug = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.045, 0.04, 8), mat(0x9a8c7a, { roughness: 1 }));
+  plug.position.y = 0.02; g.add(plug);
+  const m = coralMat(coral.color, 1.2);
+  const r = seededRand(coral.id.length * 31 + (coral.color % 97));
+  if (coral.form === "polyps") {
+    for (let i = 0; i < 8; i++) {
+      const a = r() * 6.28, rr = r() * 0.04;
+      const p = new THREE.Mesh(new THREE.SphereGeometry(0.016 + r() * 0.012, 8, 6), m);
+      p.position.set(Math.cos(a) * rr, 0.05 + r() * 0.02, Math.sin(a) * rr); p.scale.y = 0.6; g.add(p);
+    }
+  } else if (coral.form === "mush") {
+    const cap = new THREE.Mesh(new THREE.SphereGeometry(0.05, 12, 8, 0, 6.28, 0, Math.PI * 0.5), m);
+    cap.scale.set(1.25, 0.4, 1.25); cap.position.y = 0.06; g.add(cap);
+  } else if (coral.form === "brain") {
+    const dome = new THREE.Mesh(new THREE.SphereGeometry(0.05, 12, 8, 0, 6.28, 0, Math.PI * 0.55), m);
+    dome.scale.set(1.1, 0.55, 1.1); dome.position.y = 0.05; g.add(dome);
+  } else if (coral.form === "plate") {
+    const plate = new THREE.Mesh(new THREE.CylinderGeometry(0.062, 0.04, 0.025, 12), m);
+    plate.position.y = 0.06; plate.rotation.z = 0.15; g.add(plate);
+  } else { // branch
+    for (let i = 0; i < 5; i++) {
+      const a = r() * 6.28;
+      const b = new THREE.Mesh(new THREE.ConeGeometry(0.012, 0.08 + r() * 0.06, 5), m);
+      b.position.set(Math.cos(a) * 0.02, 0.08, Math.sin(a) * 0.02);
+      b.rotation.z = (r() - 0.5) * 0.9; b.rotation.x = (r() - 0.5) * 0.9; g.add(b);
+    }
+  }
+  return g;
+}
+
+export class FragRack {
+  constructor(scene, colliders, slotIndex) {
+    this.slotIndex = slotIndex;
+    const slot = FRAGRACK_SLOTS[slotIndex];
+    this.group = new THREE.Group();
+    this.group.position.set(slot.x, 0, slot.z);
+    this.group.rotation.y = slot.rotY;
+    const W = 2.0, D = 0.7, postH = 2.15;
+    const metal = mat(0x1a1a1f, { roughness: 0.45, metalness: 0.6 });
+
+    for (const sx of [-W / 2, W / 2]) for (const sz of [-D / 2, D / 2]) {
+      const post = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, postH, 8), metal);
+      post.position.set(sx, postH / 2, sz); post.castShadow = true; this.group.add(post);
+    }
+    // side plumbing
+    for (const sx of [-W / 2 - 0.07, W / 2 + 0.07]) {
+      const pipe = new THREE.Mesh(new THREE.CylinderGeometry(0.028, 0.028, postH * 0.85, 8), mat(0x2b2d42, { roughness: 0.4, metalness: 0.5 }));
+      pipe.position.set(sx, postH * 0.5, -D / 2 + 0.05); this.group.add(pipe);
+    }
+
+    this.tierY = [0.58, 1.18, 1.78];
+    this.fragMeshes = [];
+    for (const ty of this.tierY) {
+      const rail = new THREE.Mesh(new THREE.BoxGeometry(W, 0.03, D), metal);
+      rail.position.y = ty - 0.02; this.group.add(rail);
+      const tankH = 0.17;
+      const water = new THREE.Mesh(new THREE.BoxGeometry(W - 0.16, tankH - 0.05, D - 0.16),
+        new THREE.MeshStandardMaterial({ color: 0x2a8fd0, transparent: true, opacity: 0.42, roughness: 0.1 }));
+      water.position.y = ty + (tankH - 0.05) / 2; this.group.add(water);
+      const glass = new THREE.Mesh(rbox(W - 0.1, tankH, D - 0.1, 0.02),
+        new THREE.MeshStandardMaterial({ color: 0xeaffff, transparent: true, opacity: 0.14, roughness: 0.05, metalness: 0, envMapIntensity: 1.5 }));
+      glass.position.y = ty + tankH / 2; this.group.add(glass);
+      const grid = new THREE.Mesh(new THREE.BoxGeometry(W - 0.18, 0.02, D - 0.18), mat(0x33445a, { roughness: 0.85 }));
+      grid.position.y = ty + 0.012; this.group.add(grid);
+      // actinic LED bar above the tier (purple HDR -> blooms)
+      const led = new THREE.Mesh(new THREE.BoxGeometry(W - 0.24, 0.045, 0.09),
+        new THREE.MeshBasicMaterial({ color: new THREE.Color(0x8a2be2).multiplyScalar(1.25) }));
+      led.position.set(0, ty + 0.5, -D / 2 + 0.12); this.group.add(led);
+      const housing = new THREE.Mesh(new THREE.BoxGeometry(W - 0.18, 0.06, 0.13), metal);
+      housing.position.set(0, ty + 0.54, -D / 2 + 0.12); this.group.add(housing);
+      const wash = new THREE.PointLight(0x9a4bff, 0.4, 1.1, 2); wash.position.set(0, ty + 0.32, 0.05); this.group.add(wash);
+    }
+    // sump / equipment cabinet
+    const sump = new THREE.Mesh(rbox(W, 0.5, D, 0.03), mat(0x17171c, { roughness: 0.5, metalness: 0.4 }));
+    sump.position.y = 0.25; this.group.add(sump);
+    const screen = new THREE.Mesh(new THREE.PlaneGeometry(0.22, 0.13),
+      new THREE.MeshBasicMaterial({ color: new THREE.Color(0x39d3ff).multiplyScalar(1.3) }));
+    screen.position.set(W / 2 - 0.35, 0.32, D / 2 + 0.002); this.group.add(screen);
+    const pump = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 0.16, 10), metal);
+    pump.rotation.z = Math.PI / 2; pump.position.set(-W / 2 + 0.28, 0.18, D / 2 - 0.06); this.group.add(pump);
+
+    this.hit = new THREE.Mesh(new THREE.BoxGeometry(W, postH, D), new THREE.MeshBasicMaterial({ visible: false }));
+    this.hit.position.y = postH / 2;
+    this.hit.userData.interact = { type: "fragrack", unit: this };
+    this.group.add(this.hit);
+
+    scene.add(this.group);
+    colliders.push({ minX: slot.x - W / 2, maxX: slot.x + W / 2, minZ: slot.z - D / 2, maxZ: slot.z + D / 2 });
+  }
+
+  // frags: flat list of coral ids (mixed), laid out 6 per tier on the grid
+  syncFrags(frags) {
+    for (const m of this.fragMeshes) this.group.remove(m);
+    this.fragMeshes = [];
+    const perTier = 6, cols = 3;
+    const r = seededRand(this.slotIndex + 5);
+    frags.forEach((cid, i) => {
+      const tier = Math.floor(i / perTier);
+      if (tier > 2 || !item(cid)) return;
+      const idx = i % perTier, col = idx % cols, row = Math.floor(idx / cols);
+      const frag = buildFragMesh(item(cid));
+      frag.scale.setScalar(1.5);
+      frag.position.set(-0.6 + col * 0.6 + (r() - 0.5) * 0.06, this.tierY[tier] + 0.03, -0.15 + row * 0.3);
+      frag.rotation.y = r() * 6.28;
+      this.group.add(frag);
+      this.fragMeshes.push(frag);
+    });
   }
 }
