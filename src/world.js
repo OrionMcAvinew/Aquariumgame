@@ -205,11 +205,25 @@ export function buildRoom(scene, colliders) {
   ceil.position.y = wallH;
   scene.add(ceil);
   const fixMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(0xfff6e0).multiplyScalar(1.3) });
-  for (const x of [-5, 0, 5]) for (const z of [-3.5, 1.5]) {
-    const f = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.06, 0.7), fixMat);
+  for (const x of [-5, 5]) for (const z of [-3.5, 1.5]) {
+    const f = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.06, 0.55), fixMat);
     f.position.set(x, wallH - 0.04, z);
     scene.add(f);
   }
+  // modern rectangular ring light over the central aisle (like the reference)
+  const ringMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(0xfff8ec).multiplyScalar(1.6) });
+  const ringFrameMat = mat(0xced4da, { roughness: 0.5, metalness: 0.3 });
+  const ring = new THREE.Group();
+  const rw = 3.6, rd = 1.5, tk = 0.16;
+  for (const [bw, bd, bx, bz] of [[rw, tk, 0, -rd / 2], [rw, tk, 0, rd / 2], [tk, rd, -rw / 2, 0], [tk, rd, rw / 2, 0]]) {
+    const frame = new THREE.Mesh(new THREE.BoxGeometry(bw + tk, 0.1, bd), ringFrameMat);
+    frame.position.set(bx, wallH - 0.02, bz);
+    const lightBar = new THREE.Mesh(new THREE.BoxGeometry(bw, 0.05, bd * 0.55), ringMat);
+    lightBar.position.set(bx, wallH - 0.06, bz);
+    ring.add(frame, lightBar);
+  }
+  ring.position.set(0, 0, -1.5);
+  scene.add(ring);
 
   // Hanging aisle signs
   const signDefs = [
@@ -1857,5 +1871,100 @@ export class Checkout {
     ctx.fillStyle = this.allScanned() ? "#ffe066" : "#9effc8";
     ctx.fillText("$" + this.scannedSum(), 238, 104);
     this._tex.needsUpdate = true;
+  }
+}
+
+/* ---------------- Cylindrical feature aquarium (centerpiece) ---------------- */
+
+export class FeatureTank {
+  constructor(scene, colliders, x, z) {
+    const R = 0.72, H = 1.95, baseH = 0.5;
+    this.group = new THREE.Group();
+    this.group.position.set(x, 0, z);
+
+    // wooden round base
+    const base = new THREE.Mesh(new THREE.CylinderGeometry(R + 0.14, R + 0.2, baseH, 28), mat(0x7a4a24, { roughness: 0.7 }));
+    base.position.y = baseH / 2; base.castShadow = true;
+    const baseTrim = new THREE.Mesh(new THREE.CylinderGeometry(R + 0.16, R + 0.16, 0.06, 28), mat(0x5a3418));
+    baseTrim.position.y = baseH;
+    const gravel = new THREE.Mesh(new THREE.CylinderGeometry(R - 0.05, R - 0.05, 0.1, 28), mat(0xc9a86b, { roughness: 1 }));
+    gravel.position.y = baseH + 0.05;
+
+    // water column
+    this.waterMat = new THREE.MeshStandardMaterial({ color: 0x49b4e6, transparent: true, opacity: 0.3, roughness: 0.1, metalness: 0 });
+    const water = new THREE.Mesh(new THREE.CylinderGeometry(R - 0.04, R - 0.04, H - 0.12, 30), this.waterMat);
+    water.position.y = baseH + (H - 0.12) / 2 + 0.08;
+    // backlight glow disc near the base (HDR -> blooms softly)
+    const glow = new THREE.Mesh(new THREE.CylinderGeometry(R - 0.06, R - 0.06, 0.04, 28),
+      new THREE.MeshBasicMaterial({ color: new THREE.Color(0x6fd0ff).multiplyScalar(1.15), transparent: true, opacity: 0.6 }));
+    glow.position.y = baseH + 0.12;
+
+    // glass cylinder (open-ended shell) + rims
+    const glassMat = new THREE.MeshStandardMaterial({ color: 0xeaffff, transparent: true, opacity: 0.15, roughness: 0.04, metalness: 0, envMapIntensity: 1.6 });
+    const glass = new THREE.Mesh(new THREE.CylinderGeometry(R, R, H, 40, 1, true), glassMat);
+    glass.position.y = baseH + H / 2;
+    const rim = new THREE.Mesh(new THREE.CylinderGeometry(R + 0.04, R + 0.04, 0.12, 40), mat(0x2b2d42, { roughness: 0.5 }));
+    rim.position.y = baseH + H;
+    const topGlow = new THREE.Mesh(new THREE.CylinderGeometry(R - 0.04, R - 0.04, 0.03, 28),
+      new THREE.MeshBasicMaterial({ color: new THREE.Color(0xf2fbff).multiplyScalar(1.5) }));
+    topGlow.position.y = baseH + H - 0.05;
+
+    this.group.add(base, baseTrim, gravel, glow, water, glass, rim, topGlow);
+    this.addRockColumn(baseH, H);
+    scene.add(this.group);
+    colliders.push({ minX: x - R - 0.2, maxX: x + R + 0.2, minZ: z - R - 0.2, maxZ: z + R + 0.2 });
+
+    // fish circling the rock column
+    this.fish = [];
+    const r = seededRand(771);
+    const pool = ["clownfish", "bluetang", "angelfish", "goldfish", "tetra", "discus", "rainbow", "gourami"];
+    for (let i = 0; i < 9; i++) {
+      const sp = item(pool[Math.floor(r() * pool.length)]);
+      const { group, tail } = buildFishMesh(sp, 0.9);
+      this.group.add(group);
+      this.fish.push({
+        group, tail,
+        radius: 0.28 + r() * 0.28,
+        y: baseH + 0.3 + r() * (H - 0.7),
+        speed: (0.3 + r() * 0.35) * (r() < 0.5 ? 1 : -1),
+        ang: r() * Math.PI * 2, phase: r() * 6,
+      });
+    }
+    this.time = 0;
+  }
+
+  addRockColumn(baseH, H) {
+    const r = seededRand(42);
+    const rockA = mat(0x6b5642, { roughness: 0.95 });
+    const rockB = mat(0x8a7559, { roughness: 0.95 });
+    let y = baseH + 0.12;
+    const n = 7;
+    for (let i = 0; i < n; i++) {
+      const rr = 0.3 * (1 - i / n * 0.62) + 0.05;
+      const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(rr, 0), i % 2 ? rockA : rockB);
+      rock.position.set((r() - 0.5) * 0.14, y + rr * 0.5, (r() - 0.5) * 0.14);
+      rock.rotation.set(r() * 3, r() * 3, r() * 3);
+      rock.scale.set(1 + r() * 0.3, 0.8 + r() * 0.3, 1 + r() * 0.3);
+      this.group.add(rock);
+      y += rr * 0.95;
+    }
+    for (let i = 0; i < 3; i++) { // driftwood ledges
+      const branch = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.045, 0.3 + r() * 0.25, 6), mat(0x5a4632, { roughness: 1 }));
+      branch.position.set((r() - 0.5) * 0.32, baseH + 0.45 + r() * (H - 0.9), (r() - 0.5) * 0.32);
+      branch.rotation.z = (r() - 0.5) * 1.6; branch.rotation.y = r() * 3;
+      this.group.add(branch);
+    }
+  }
+
+  update(dt) {
+    this.time += dt;
+    for (const f of this.fish) {
+      f.ang += f.speed * dt;
+      const x = Math.cos(f.ang) * f.radius, z = Math.sin(f.ang) * f.radius;
+      f.group.position.set(x, f.y + Math.sin(this.time + f.phase) * 0.05, z);
+      const vx = -Math.sin(f.ang) * f.speed, vz = Math.cos(f.ang) * f.speed;
+      f.group.rotation.y = Math.atan2(-vz, vx);
+      if (f.tail) f.tail.rotation.y = Math.sin(this.time * 8 + f.phase) * 0.5;
+    }
   }
 }

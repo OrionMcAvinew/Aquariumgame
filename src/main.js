@@ -4,7 +4,7 @@ import {
   CATALOG, item, DAY_LEN, CARE_DECAY_PER_DAY, xpForLevel, MAX_LEVEL,
   PALLET, REGISTER_ZONE, SHELF_ROWS, TANK_FISH_CAP, ROW_CAP, ACHIEVEMENTS, STAFF,
 } from "./data.js";
-import { buildRoom, TankUnit, ShelfUnit, createBoxMesh, loadFishAssets, Checkout, createCustomerMesh } from "./world.js";
+import { buildRoom, TankUnit, ShelfUnit, createBoxMesh, loadFishAssets, Checkout, createCustomerMesh, FeatureTank } from "./world.js";
 import { RoomEnvironment } from "../lib/jsm/RoomEnvironment.js";
 import { EffectComposer } from "../lib/jsm/postprocessing/EffectComposer.js";
 import { RenderPass } from "../lib/jsm/postprocessing/RenderPass.js";
@@ -360,6 +360,7 @@ function init() {
   game.scene.add(supply);
 
   buildRoom(game.scene, game.colliders);
+  game.featureTank = new FeatureTank(game.scene, game.colliders, 6.4, 3.0);
 
   game.sound = new Sound();
   game.ui = new UI(game);
@@ -451,6 +452,7 @@ function loop(now) {
     else if (game.checkout.customer) game.checkout.clear();
     game.checkout.update(dt);
     updateStaff(dt);
+    game.featureTank.update(dt);
     for (const t of game.tankUnits) t.update(dt);
   }
 
