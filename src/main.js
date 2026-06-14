@@ -5,6 +5,7 @@ import {
   PALLET, REGISTER_ZONE, SHELF_ROWS, TANK_FISH_CAP, ROW_CAP, ACHIEVEMENTS, STAFF,
 } from "./data.js";
 import { buildRoom, TankUnit, ShelfUnit, createBoxMesh, loadFishAssets, Checkout, createCustomerMesh } from "./world.js";
+import { RoomEnvironment } from "../lib/jsm/RoomEnvironment.js";
 import { Player } from "./player.js";
 import { CustomerManager } from "./customers.js";
 import { UI } from "./ui.js";
@@ -303,10 +304,16 @@ function init() {
   game.renderer.setSize(innerWidth, innerHeight);
   game.renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
   game.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  game.renderer.toneMappingExposure = 1.15;
+  game.renderer.toneMappingExposure = 1.1;
   game.scene.fog = new THREE.Fog(0x9ed4e8, 28, 60);
   const isTouch = matchMedia("(pointer: coarse)").matches;
   game.renderer.shadowMap.enabled = !isTouch;
+  game.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+  // Image-based lighting: a soft room environment gives subtle reflections to
+  // the PBR surfaces (glass, water, metal trim) so nothing looks flat.
+  const pmrem = new THREE.PMREMGenerator(game.renderer);
+  game.scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
 
   // Lights
   game.hemi = new THREE.HemisphereLight(0xfff6e8, 0x9aa5a0, 1.25);

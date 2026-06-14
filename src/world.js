@@ -1,11 +1,37 @@
 // Builds the 3D store: room, furniture units (tanks/shelves), delivery boxes.
 import * as THREE from "three";
+import { RoundedBoxGeometry } from "../lib/jsm/RoundedBoxGeometry.js";
 import {
   STORE, TANK_SLOTS, SHELF_SLOTS, COUNTER, PALLET,
   SHELF_ROWS, ROW_CAP, item, FISH,
 } from "./data.js";
 
-const mat = (color, opts = {}) => new THREE.MeshLambertMaterial({ color, ...opts });
+// PBR material so surfaces pick up the room environment (reflections, softer
+// shading) instead of looking flat. Small decor/coral keep cheaper materials.
+const mat = (color, opts = {}) => new THREE.MeshStandardMaterial({ color, roughness: 0.85, metalness: 0.0, ...opts });
+// rounded-edge box to soften the blocky furniture
+const rbox = (w, h, d, r = 0.05) =>
+  new RoundedBoxGeometry(w, h, d, 3, Math.max(0.008, Math.min(r, Math.min(w, h, d) / 2 - 0.004)));
+
+// soft contact-shadow blob to ground furniture on the floor
+let _shadowTex = null;
+function shadowTexture() {
+  if (_shadowTex) return _shadowTex;
+  const c = document.createElement("canvas"); c.width = c.height = 64;
+  const x = c.getContext("2d");
+  const g = x.createRadialGradient(32, 32, 2, 32, 32, 30);
+  g.addColorStop(0, "rgba(0,0,0,0.45)"); g.addColorStop(1, "rgba(0,0,0,0)");
+  x.fillStyle = g; x.fillRect(0, 0, 64, 64);
+  _shadowTex = new THREE.CanvasTexture(c);
+  return _shadowTex;
+}
+function addContactShadow(group, w, d, y = 0.02) {
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(w, d),
+    new THREE.MeshBasicMaterial({ map: shadowTexture(), transparent: true, depthWrite: false }));
+  m.rotation.x = -Math.PI / 2;
+  m.position.y = y;
+  group.add(m);
+}
 
 const NAVY = 0x1d3557;
 const TRIM = 0xf4f1ea;
@@ -89,7 +115,7 @@ export function buildRoom(scene, colliders) {
   floorTex.repeat.set(halfW * 0.8, halfD * 0.8);
   const floor = new THREE.Mesh(
     new THREE.PlaneGeometry(halfW * 2, halfD * 2),
-    new THREE.MeshLambertMaterial({ map: floorTex })
+    new THREE.MeshStandardMaterial({ map: floorTex, roughness: 0.55, metalness: 0.0, envMapIntensity: 0.5 })
   );
   floor.rotation.x = -Math.PI / 2;
   floor.receiveShadow = true;
@@ -142,8 +168,8 @@ export function buildRoom(scene, colliders) {
   wall(5.6, -5.0, -halfD + 0.17, 0, mat(TRIM), 0.1, 2.78, 0.06);
 
   // South storefront: knee wall + big glass windows flanking the door
-  const glassMat = new THREE.MeshPhongMaterial({
-    color: 0xbfe6f5, transparent: true, opacity: 0.22, shininess: 90,
+  const glassMat = new THREE.MeshStandardMaterial({
+    color: 0xcfeefb, transparent: true, opacity: 0.2, roughness: 0.05, metalness: 0, envMapIntensity: 1.5,
   });
   const segW = halfW - doorHalf;
   for (const side of [-1, 1]) {
@@ -293,11 +319,11 @@ export function buildRoom(scene, colliders) {
 
   // Checkout counter + register
   const counterGroup = new THREE.Group();
-  const top = new THREE.Mesh(new THREE.BoxGeometry(COUNTER.w, 0.08, COUNTER.d), mat(0x8a5a3b));
+  const top = new THREE.Mesh(rbox(COUNTER.w, 0.08, COUNTER.d, 0.035), mat(0x8a5a3b, { roughness: 0.6 }));
   top.position.y = COUNTER.h;
-  const body = new THREE.Mesh(new THREE.BoxGeometry(COUNTER.w - 0.1, COUNTER.h, COUNTER.d - 0.15), mat(NAVY));
+  const body = new THREE.Mesh(rbox(COUNTER.w - 0.1, COUNTER.h, COUNTER.d - 0.15, 0.05), mat(NAVY, { roughness: 0.55 }));
   body.position.y = COUNTER.h / 2;
-  const register = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.3, 0.36), mat(0x2b2d42));
+  const register = new THREE.Mesh(rbox(0.42, 0.3, 0.36, 0.05), mat(0x2b2d42, { roughness: 0.5 }));
   register.position.set(-COUNTER.w / 2 + 0.45, COUNTER.h + 0.19, 0);
   const screen = new THREE.Mesh(new THREE.PlaneGeometry(0.3, 0.18),
     new THREE.MeshBasicMaterial({ color: 0x9ef0ff }));
@@ -311,6 +337,7 @@ export function buildRoom(scene, colliders) {
   counterGroup.position.set(COUNTER.x, 0, COUNTER.z);
   counterGroup.traverse((m) => { m.castShadow = true; });
   scene.add(counterGroup);
+  addContactShadow(counterGroup, COUNTER.w + 0.5, COUNTER.d + 0.6);
   colliders.push({
     minX: COUNTER.x - COUNTER.w / 2, maxX: COUNTER.x + COUNTER.w / 2,
     minZ: COUNTER.z - COUNTER.d / 2, maxZ: COUNTER.z + COUNTER.d / 2,
@@ -985,16 +1012,16 @@ export class TankUnit {
     this.group.position.set(slot.x, 0, slot.z);
     this.group.rotation.y = slot.rotY;
 
-    const navyMat = mat(NAVY);
-    const trimMat = mat(TRIM);
+    const navyMat = mat(NAVY, { roughness: 0.55 });
+    const trimMat = mat(TRIM, { roughness: 0.6 });
 
     // cabinet base
-    const cabinet = new THREE.Mesh(new THREE.BoxGeometry(2.0, MAIN_Y, 0.78), navyMat);
+    const cabinet = new THREE.Mesh(rbox(2.0, MAIN_Y, 0.78, 0.05), navyMat);
     cabinet.position.y = MAIN_Y / 2;
     cabinet.castShadow = true;
-    const kick = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.08, 0.8), mat(0x14253c));
+    const kick = new THREE.Mesh(rbox(2.0, 0.08, 0.8, 0.03), mat(0x14253c));
     kick.position.y = 0.04;
-    const cabTrim = new THREE.Mesh(new THREE.BoxGeometry(2.02, 0.06, 0.8), trimMat);
+    const cabTrim = new THREE.Mesh(rbox(2.02, 0.06, 0.8, 0.025), trimMat);
     cabTrim.position.y = MAIN_Y - 0.03;
 
     // main tank: glowing back panel, water, glass
@@ -1002,22 +1029,23 @@ export class TankUnit {
     const glow = new THREE.Mesh(new THREE.PlaneGeometry(1.86, MAIN_H - 0.12), this.glowMat);
     glow.position.set(0, MAIN_Y + MAIN_H / 2, -0.3);
 
-    this.waterMat = new THREE.MeshLambertMaterial({ color: 0x4fb4e0, transparent: true, opacity: 0.26 });
+    this.waterMat = new THREE.MeshStandardMaterial({ color: 0x4fb4e0, transparent: true, opacity: 0.26, roughness: 0.1, metalness: 0 });
     this.water = new THREE.Mesh(new THREE.BoxGeometry(1.86, MAIN_H - 0.18, 0.58), this.waterMat);
     this.water.position.y = MAIN_Y + (MAIN_H - 0.18) / 2 + 0.1;
 
-    const glassMat = new THREE.MeshPhongMaterial({
-      color: 0xd6f3ff, transparent: true, opacity: 0.13, shininess: 120,
+    // reflective glass: low roughness + env map reflections
+    const glassMat = new THREE.MeshStandardMaterial({
+      color: 0xeaffff, transparent: true, opacity: 0.16, roughness: 0.04, metalness: 0, envMapIntensity: 1.4,
     });
-    this.glass = new THREE.Mesh(new THREE.BoxGeometry(1.94, MAIN_H, 0.7), glassMat);
+    this.glass = new THREE.Mesh(rbox(1.94, MAIN_H, 0.7, 0.04), glassMat);
     this.glass.position.y = MAIN_Y + MAIN_H / 2;
     this.glass.userData.interact = { type: "tank", unit: this };
 
-    const gravel = new THREE.Mesh(new THREE.BoxGeometry(1.86, 0.08, 0.58), mat(0xc9a86b));
+    const gravel = new THREE.Mesh(new THREE.BoxGeometry(1.86, 0.08, 0.58), mat(0xc9a86b, { roughness: 1 }));
     gravel.position.y = MAIN_Y + 0.06;
 
     // hood between tiers with a light strip
-    const hood = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.1, 0.76), navyMat);
+    const hood = new THREE.Mesh(rbox(2.0, 0.1, 0.76, 0.04), navyMat);
     hood.position.y = MAIN_Y + MAIN_H + 0.04;
     const strip = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.025, 0.5),
       new THREE.MeshBasicMaterial({ color: 0xf4fcff }));
@@ -1047,16 +1075,17 @@ export class TankUnit {
       new THREE.MeshBasicMaterial({ color: 0x59d1f9 }));
     decoGlow.position.set(0, DECO_Y + decoH / 2, -0.28);
     const decoWater = new THREE.Mesh(new THREE.BoxGeometry(1.86, decoH - 0.1, 0.52),
-      new THREE.MeshLambertMaterial({ color: 0x4fb4e0, transparent: true, opacity: 0.22 }));
+      new THREE.MeshStandardMaterial({ color: 0x4fb4e0, transparent: true, opacity: 0.22, roughness: 0.1 }));
     decoWater.position.y = DECO_Y + decoH / 2;
-    const decoGlass = new THREE.Mesh(new THREE.BoxGeometry(1.94, decoH, 0.62), glassMat);
+    const decoGlass = new THREE.Mesh(rbox(1.94, decoH, 0.62, 0.035), glassMat);
     decoGlass.position.y = DECO_Y + decoH / 2;
-    const cap = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.09, 0.7), navyMat);
+    const cap = new THREE.Mesh(rbox(2.0, 0.09, 0.7, 0.04), navyMat);
     cap.position.y = DECO_Y + decoH + 0.045;
-    const capTrim = new THREE.Mesh(new THREE.BoxGeometry(2.02, 0.04, 0.72), trimMat);
+    const capTrim = new THREE.Mesh(rbox(2.02, 0.04, 0.72, 0.02), trimMat);
     capTrim.position.y = DECO_Y + decoH + 0.11;
     this.group.add(decoGlow, decoWater, decoGlass, cap, capTrim);
 
+    addContactShadow(this.group, 2.4, 1.1);
     this.addDecorations();
     this.addBubbles();
     this.addCaustics();
@@ -1439,24 +1468,25 @@ export class ShelfUnit {
     this.group.rotation.y = slot.rotY;
 
     // warm white retail shelving with a teal header
-    const frameMat = mat(0xede4d3);
-    const back = new THREE.Mesh(new THREE.BoxGeometry(1.9, 2.0, 0.06), mat(0xe3d9c6));
+    const frameMat = mat(0xede4d3, { roughness: 0.75 });
+    const back = new THREE.Mesh(rbox(1.9, 2.0, 0.06, 0.02), mat(0xe3d9c6, { roughness: 0.85 }));
     back.position.set(0, 1.0, -0.22);
     back.castShadow = true;
     this.group.add(back);
     for (const sx of [-0.94, 0.94]) {
-      const side = new THREE.Mesh(new THREE.BoxGeometry(0.06, 2.0, 0.5), frameMat);
+      const side = new THREE.Mesh(rbox(0.06, 2.0, 0.5, 0.025), frameMat);
       side.position.set(sx, 1.0, 0);
       this.group.add(side);
     }
     for (let i = 0; i < SHELF_ROWS + 1; i++) {
-      const board = new THREE.Mesh(new THREE.BoxGeometry(1.9, 0.05, 0.5), frameMat);
+      const board = new THREE.Mesh(rbox(1.9, 0.05, 0.5, 0.022), frameMat);
       board.position.y = 0.25 + i * 0.58;
       this.group.add(board);
     }
-    const headerBand = new THREE.Mesh(new THREE.BoxGeometry(1.96, 0.18, 0.52), mat(0x2a9d8f));
+    const headerBand = new THREE.Mesh(rbox(1.96, 0.18, 0.52, 0.04), mat(0x2a9d8f, { roughness: 0.6 }));
     headerBand.position.y = 2.12;
     this.group.add(headerBand);
+    addContactShadow(this.group, 2.2, 0.8);
 
     // Invisible interaction volume covering the shelf
     this.hit = new THREE.Mesh(
@@ -1598,7 +1628,7 @@ export function createCustomerMesh(opts = {}) {
 // A bagged fish: a knotted water bag with the fish sprite floating inside.
 function buildFishBag(species) {
   const g = new THREE.Group();
-  const bagMat = new THREE.MeshPhongMaterial({ color: 0xbfe6f5, transparent: true, opacity: 0.4, shininess: 90 });
+  const bagMat = new THREE.MeshStandardMaterial({ color: 0xcfeefb, transparent: true, opacity: 0.4, roughness: 0.1, metalness: 0, envMapIntensity: 1.3 });
   const bag = new THREE.Mesh(new THREE.SphereGeometry(0.11, 12, 10), bagMat);
   bag.scale.set(0.85, 1.08, 0.85); bag.position.y = 0.12;
   const water = new THREE.Mesh(new THREE.SphereGeometry(0.092, 12, 10),
