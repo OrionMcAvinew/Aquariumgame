@@ -6,6 +6,10 @@ import {
 } from "./data.js";
 import { buildRoom, TankUnit, ShelfUnit, createBoxMesh, loadFishAssets, Checkout, createCustomerMesh } from "./world.js";
 import { RoomEnvironment } from "../lib/jsm/RoomEnvironment.js";
+import { EffectComposer } from "../lib/jsm/postprocessing/EffectComposer.js";
+import { RenderPass } from "../lib/jsm/postprocessing/RenderPass.js";
+import { UnrealBloomPass } from "../lib/jsm/postprocessing/UnrealBloomPass.js";
+import { OutputPass } from "../lib/jsm/postprocessing/OutputPass.js";
 import { Player } from "./player.js";
 import { CustomerManager } from "./customers.js";
 import { UI } from "./ui.js";
@@ -315,6 +319,18 @@ function init() {
   const pmrem = new THREE.PMREMGenerator(game.renderer);
   game.scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
 
+  // HDR bloom so emissive surfaces (tank backlights, neon coral, light strips,
+  // the register screen) actually glow. Desktop only — too costly on phones.
+  if (!isTouch) {
+    const composer = new EffectComposer(game.renderer);
+    composer.addPass(new RenderPass(game.scene, game.camera));
+    const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.35, 0.4, 1.0);
+    composer.addPass(bloom);
+    composer.addPass(new OutputPass());
+    game.composer = composer;
+    game.bloom = bloom;
+  }
+
   // Lights
   game.hemi = new THREE.HemisphereLight(0xfff6e8, 0x9aa5a0, 1.25);
   game.scene.add(game.hemi);
@@ -370,6 +386,7 @@ function init() {
     game.camera.aspect = innerWidth / innerHeight;
     game.camera.updateProjectionMatrix();
     game.renderer.setSize(innerWidth, innerHeight);
+    game.composer?.setSize(innerWidth, innerHeight);
   });
   setInterval(game.save, 10000);
   addEventListener("beforeunload", game.save);
@@ -440,7 +457,8 @@ function loop(now) {
   game.player.update(dt);
   game.ui.updateHUD();
   game.ui.updateCheckout();
-  game.renderer.render(game.scene, game.camera);
+  if (game.composer) game.composer.render();
+  else game.renderer.render(game.scene, game.camera);
 }
 
 // Load the fish sprite pack first; init() falls back to procedural art if

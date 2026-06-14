@@ -141,7 +141,7 @@ export function buildRoom(scene, colliders) {
   const post = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.06, 3.4, 8), mat(0x343a40));
   post.position.set(6.5, 1.7, halfD + 1.6);
   const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.16, 8, 6),
-    new THREE.MeshBasicMaterial({ color: 0xfff3c4 }));
+    new THREE.MeshBasicMaterial({ color: new THREE.Color(0xfff3c4).multiplyScalar(1.6) }));
   lamp.position.set(6.5, 3.4, halfD + 1.6);
   scene.add(post, lamp);
 
@@ -204,7 +204,7 @@ export function buildRoom(scene, colliders) {
   ceil.rotation.x = Math.PI / 2;
   ceil.position.y = wallH;
   scene.add(ceil);
-  const fixMat = new THREE.MeshBasicMaterial({ color: 0xfff6e0 });
+  const fixMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(0xfff6e0).multiplyScalar(1.3) });
   for (const x of [-5, 0, 5]) for (const z of [-3.5, 1.5]) {
     const f = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.06, 0.7), fixMat);
     f.position.set(x, wallH - 0.04, z);
@@ -800,10 +800,12 @@ const CORAL_PALETTE = [
   0x7c1fff, 0xff00a0, 0x7cff00, 0x00ffd0, 0xff3860, 0x39ff14,
 ];
 
-// emissive coral material so reefs glow under the tank light
-function coralMat(color, emiss = 0.5) {
+// emissive coral material so reefs glow (and bloom) under the tank light.
+// emissiveIntensity > 1 pushes the neon colours into HDR so they bloom.
+function coralMat(color, emiss = 1.15) {
   const m = new THREE.MeshLambertMaterial({ color });
-  m.emissive = new THREE.Color(color).multiplyScalar(emiss);
+  m.emissive = new THREE.Color(color);
+  m.emissiveIntensity = emiss;
   return m;
 }
 const _UP = new THREE.Vector3(0, 1, 0);
@@ -1124,7 +1126,7 @@ export class TankUnit {
     const hood = new THREE.Mesh(rbox(2.0, 0.1, 0.76, 0.04), navyMat);
     hood.position.y = MAIN_Y + MAIN_H + 0.04;
     const strip = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.025, 0.5),
-      new THREE.MeshBasicMaterial({ color: 0xf4fcff }));
+      new THREE.MeshBasicMaterial({ color: new THREE.Color(0xf4fcff).multiplyScalar(1.4) }));
     strip.position.y = MAIN_Y + MAIN_H - 0.02;
 
     // shimmering water surface near the top of the tank
@@ -1148,7 +1150,7 @@ export class TankUnit {
     // upper decorative display tank (ambient fish, pure vibes)
     const decoH = 0.5;
     const decoGlow = new THREE.Mesh(new THREE.PlaneGeometry(1.86, decoH - 0.08),
-      new THREE.MeshBasicMaterial({ color: 0x59d1f9 }));
+      new THREE.MeshBasicMaterial({ color: new THREE.Color(0x59d1f9).multiplyScalar(1.15) }));
     decoGlow.position.set(0, DECO_Y + decoH / 2, -0.28);
     const decoWater = new THREE.Mesh(new THREE.BoxGeometry(1.86, decoH - 0.1, 0.52),
       new THREE.MeshStandardMaterial({ color: 0x4fb4e0, transparent: true, opacity: 0.22, roughness: 0.1 }));
@@ -1356,7 +1358,8 @@ export class TankUnit {
     // clean blue -> murky green; backlight dims as the tank fouls
     this.waterMat.color.setHex(0x4fb4e0).lerp(new THREE.Color(0x5a7f3d), 1 - t);
     this.waterMat.opacity = 0.24 + (1 - t) * 0.45;
-    this.glowMat.color.setHex(0x3ec3f7).lerp(new THREE.Color(0x4a5a35), 1 - t);
+    // HDR backlight (>1) so it blooms; dims toward green as the tank fouls
+    this.glowMat.color.setHex(0x3ec3f7).lerp(new THREE.Color(0x4a5a35), 1 - t).multiplyScalar(1.2);
   }
 
   update(dt) {
