@@ -1,7 +1,7 @@
 // Customer NPCs: spawn, browse for wanted items, take stock, queue, pay, leave.
 import {
   item, CATALOG, MAX_CUSTOMERS, QUEUE_PATIENCE, CARE_SELL_MIN,
-  TANK_SLOTS, SHELF_SLOTS, tankBrowseSpot, shelfBrowseSpot,
+  TANK_SLOTS, SHELF_SLOTS, FRAGRACK_SLOTS, tankBrowseSpot, shelfBrowseSpot, fragBrowseSpot,
   QUEUE_SPOTS, DOOR_IN, SPAWN, AISLE_X, ROW_CAP, TANK_FISH_CAP,
 } from "./data.js";
 import { createCustomerMesh } from "./world.js";
@@ -62,6 +62,12 @@ class Customer {
           spot = tankBrowseSpot(TANK_SLOTS[ti]);
           this.pendingTake = { kind: "fish", id, tankIdx: ti };
         }
+      } else if (it.kind === "coral") {
+        const ri = g.state.fragRacks.findIndex((rk) => rk.frags.includes(id));
+        if (ri !== -1) {
+          spot = fragBrowseSpot(FRAGRACK_SLOTS[ri]);
+          this.pendingTake = { kind: "coral", id, rackIdx: ri };
+        }
       } else {
         const si = g.state.shelves.findIndex(
           (s) => s.rows.some((r) => r.product === id && r.count > 0)
@@ -100,6 +106,14 @@ class Customer {
       if (i !== -1 && tank.care >= CARE_SELL_MIN) {
         tank.fish.splice(i, 1);
         g.tankUnits[t.tankIdx].syncFish(tank.fish);
+        this.cart.push({ id: t.id, label: item(t.id).name, price, scanned: false });
+      }
+    } else if (t.kind === "coral") {
+      const rk = g.state.fragRacks[t.rackIdx];
+      const i = rk.frags.indexOf(t.id);
+      if (i !== -1) {
+        rk.frags.splice(i, 1);
+        g.fragRackUnits[t.rackIdx].syncFrags(rk.frags);
         this.cart.push({ id: t.id, label: item(t.id).name, price, scanned: false });
       }
     } else {
@@ -148,6 +162,9 @@ class Customer {
       if (it.kind === "fish") {
         const ti = g.state.tanks.findIndex((t) => t.fish.length < TANK_FISH_CAP);
         if (ti !== -1) { g.state.tanks[ti].fish.push(c.id); g.tankUnits[ti].syncFish(g.state.tanks[ti].fish); }
+      } else if (it.kind === "coral") {
+        const ri = g.state.fragRacks.findIndex((rk) => rk.frags.length < 18);
+        if (ri !== -1) { g.state.fragRacks[ri].frags.push(c.id); g.fragRackUnits[ri].syncFrags(g.state.fragRacks[ri].frags); }
       } else {
         outer: for (const [si, s] of g.state.shelves.entries()) {
           for (const r of s.rows) {
@@ -236,7 +253,9 @@ export class CustomerManager {
     const stocked = unlocked.filter((c) =>
       c.kind === "fish"
         ? g.state.tanks.some((t) => t.fish.includes(c.id) && t.care >= CARE_SELL_MIN)
-        : g.state.shelves.some((s) => s.rows.some((r) => r.product === c.id && r.count > 0))
+        : c.kind === "coral"
+          ? g.state.fragRacks.some((rk) => rk.frags.includes(c.id))
+          : g.state.shelves.some((s) => s.rows.some((r) => r.product === c.id && r.count > 0))
     );
     const n = 1 + Math.floor(Math.random() * Math.random() * 3);
     const wants = [];

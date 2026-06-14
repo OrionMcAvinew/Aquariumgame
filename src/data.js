@@ -71,8 +71,34 @@ export const PRODUCTS = [
   { id: "bg",      name: "Tank Backdrop", kind: "product", boxSize: 6, boxCost: 24,  market: 9,  level: 8, color: 0x118ab2, shape: "bar" },
 ];
 
-export const CATALOG = [...FISH, ...PRODUCTS];
+// Coral frags — sold from frag racks (kind: "coral").
+export const CORAL = [
+  { id: "zoa",     name: "Zoanthids",   kind: "coral", boxSize: 4, boxCost: 24,  market: 18,  level: 1, color: 0x39ff14, form: "polyps" },
+  { id: "mushroom",name: "Mushrooms",   kind: "coral", boxSize: 4, boxCost: 28,  market: 21,  level: 1, color: 0xff206e, form: "mush" },
+  { id: "duncan",  name: "Duncan",      kind: "coral", boxSize: 4, boxCost: 34,  market: 26,  level: 2, color: 0xffd400, form: "polyps" },
+  { id: "acan",    name: "Acan",        kind: "coral", boxSize: 4, boxCost: 40,  market: 30,  level: 2, color: 0xff5d00, form: "brain" },
+  { id: "hammer",  name: "Hammer Coral",kind: "coral", boxSize: 4, boxCost: 48,  market: 36,  level: 3, color: 0x00e5ff, form: "branch" },
+  { id: "torch",   name: "Torch Coral", kind: "coral", boxSize: 4, boxCost: 60,  market: 45,  level: 3, color: 0x7c1fff, form: "branch" },
+  { id: "monti",   name: "Montipora",   kind: "coral", boxSize: 4, boxCost: 55,  market: 42,  level: 4, color: 0xff3860, form: "plate" },
+  { id: "favia",   name: "Favia",       kind: "coral", boxSize: 4, boxCost: 50,  market: 38,  level: 4, color: 0x7cff00, form: "brain" },
+  { id: "acro",    name: "Acropora",    kind: "coral", boxSize: 2, boxCost: 80,  market: 60,  level: 5, color: 0x00ffd0, form: "branch" },
+  { id: "goni",    name: "Goniopora",   kind: "coral", boxSize: 2, boxCost: 90,  market: 68,  level: 5, color: 0xff00a0, form: "polyps" },
+  { id: "chalice", name: "Chalice",     kind: "coral", boxSize: 2, boxCost: 110, market: 82,  level: 6, color: 0xffa62b, form: "plate" },
+  { id: "scoly",   name: "Scolymia",    kind: "coral", boxSize: 1, boxCost: 160, market: 120, level: 7, color: 0xff1f6b, form: "brain" },
+];
+
+export const CATALOG = [...FISH, ...PRODUCTS, ...CORAL];
 const byId = new Map(CATALOG.map((c) => [c.id, c]));
+
+export const FRAG_CAP = 18;                 // frags per rack (3 tiers x 6)
+export const fragRackPrice = (owned) => Math.round(220 * Math.pow(1.5, owned));
+export const MAX_FRAGRACK_SLOTS = 3;
+export const FRAGRACK_SLOTS = [
+  { x: -1.7, z: -5.0, rotY: 0 },
+  { x: 1.7,  z: -5.0, rotY: 0 },
+  { x: -5.2, z: -5.0, rotY: 0 },
+];
+export const fragBrowseSpot = (s) => ({ x: s.x, z: s.z + 1.3 });
 
 // Achievements — test(state) checks lifetime counters + current state.
 export const ACHIEVEMENTS = [
