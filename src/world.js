@@ -1439,121 +1439,136 @@ export class TankUnit {
 
 /* ---------------- Shelf unit ---------------- */
 
-// Printed retail label for a product (used on box/bottle fronts).
-const prodLabelCache = new Map();
+// ---- Product packaging art ----
+const PROD_ICON = {
+  food: "🍤", net: "🥅", gravel: "🪨", plant: "🌿", decor: "🪸", thermo: "🌡️",
+  heater: "🔥", pump: "💨", cond: "💧", light: "💡", testkit: "🧪", filter: "⚙️",
+  wood: "🪵", castle: "🏰", kit: "📦", bg: "🖼️",
+};
+const prodIcon = (p) => PROD_ICON[p.id] || (p.kind === "coral" ? "🪸" : "🐠");
+
+function roundRectPath(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+
+// Front label for boxes / pouches (portrait)
+const boxLabelCache = new Map();
 function productLabel(prod) {
-  if (prodLabelCache.has(prod.id)) return prodLabelCache.get(prod.id);
-  const words = prod.name.toUpperCase().split(" ");
+  if (boxLabelCache.has(prod.id)) return boxLabelCache.get(prod.id);
   const tex = canvasTexture((ctx, w, h) => {
-    ctx.fillStyle = "#f7f3ea"; ctx.fillRect(0, 0, w, h);
-    ctx.fillStyle = cssOf(prod.color); ctx.fillRect(0, 0, w, h * 0.34);
-    ctx.fillStyle = darkenCss(prod.color, 0.25); ctx.fillRect(0, h * 0.32, w, h * 0.03);
-    // brand tab
-    ctx.fillStyle = "#1d3557"; ctx.fillRect(w * 0.08, h * 0.06, w * 0.84, h * 0.06);
-    // product art swatch
-    ctx.fillStyle = cssOf(prod.color); ctx.strokeStyle = darkenCss(prod.color, 0.3);
-    ctx.lineWidth = 4;
-    ctx.beginPath(); ctx.arc(w * 0.5, h * 0.55, w * 0.16, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-    ctx.fillStyle = "#fff"; ctx.font = `bold ${Math.round(w * 0.18)}px sans-serif`;
-    ctx.textAlign = "center"; ctx.textBaseline = "middle";
-    ctx.fillText(prod.kind === "fish" ? "🐟" : "🐠", w * 0.5, h * 0.55);
+    ctx.fillStyle = "#f6f2e8"; ctx.fillRect(0, 0, w, h);
+    const g = ctx.createLinearGradient(0, 0, 0, h * 0.3);
+    g.addColorStop(0, lightenCss(prod.color, 0.25)); g.addColorStop(1, cssOf(prod.color));
+    ctx.fillStyle = g; ctx.fillRect(0, 0, w, h * 0.3);
+    ctx.fillStyle = "rgba(255,255,255,0.95)"; ctx.textBaseline = "middle";
+    ctx.font = `bold ${Math.round(w * 0.11)}px sans-serif`; ctx.textAlign = "left";
+    ctx.fillText("AQUAPRO", w * 0.08, h * 0.155);
+    // icon panel
+    ctx.fillStyle = "#ffffff"; roundRectPath(ctx, w * 0.13, h * 0.36, w * 0.74, h * 0.34, 10); ctx.fill();
+    ctx.lineWidth = 3; ctx.strokeStyle = cssOf(prod.color); ctx.stroke();
+    ctx.font = `${Math.round(w * 0.4)}px sans-serif`; ctx.textAlign = "center";
+    ctx.fillText(prodIcon(prod), w * 0.5, h * 0.55);
     // name
-    ctx.fillStyle = "#22303f"; ctx.font = `bold ${Math.round(w * 0.13)}px sans-serif`;
-    words.forEach((word, i) => ctx.fillText(word, w * 0.5, h * (0.82 + i * 0.12) - (words.length - 1) * h * 0.06));
-  }, 96, 128);
-  prodLabelCache.set(prod.id, tex);
+    ctx.fillStyle = "#243240"; ctx.font = `bold ${Math.round(w * 0.12)}px sans-serif`;
+    prod.name.toUpperCase().split(" ").forEach((wd, i) => ctx.fillText(wd, w * 0.5, h * (0.79 + i * 0.1)));
+    ctx.fillStyle = cssOf(prod.color); ctx.fillRect(0, h * 0.96, w, h * 0.04);
+  }, 128, 160);
+  boxLabelCache.set(prod.id, tex);
+  return tex;
+}
+
+// Wraparound label for cans / bottles / tubes (lands on the cylinder side)
+const wrapLabelCache = new Map();
+function wrapLabel(prod) {
+  if (wrapLabelCache.has(prod.id)) return wrapLabelCache.get(prod.id);
+  const tex = canvasTexture((ctx, w, h) => {
+    ctx.fillStyle = "#f6f2e8"; ctx.fillRect(0, 0, w, h);
+    ctx.fillStyle = cssOf(prod.color); ctx.fillRect(0, 0, w, h * 0.22); ctx.fillRect(0, h * 0.78, w, h * 0.22);
+    ctx.fillStyle = darkenCss(prod.color, 0.25); ctx.fillRect(0, h * 0.22, w, h * 0.02); ctx.fillRect(0, h * 0.76, w, h * 0.02);
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillStyle = "rgba(255,255,255,0.95)"; ctx.font = `bold ${Math.round(h * 0.12)}px sans-serif`;
+    ctx.fillText("AQUAPRO", w * 0.5, h * 0.11);
+    ctx.font = `${Math.round(h * 0.32)}px sans-serif`;
+    ctx.fillText(prodIcon(prod), w * 0.5, h * 0.47);
+    ctx.fillStyle = "#243240"; ctx.font = `bold ${Math.round(h * 0.11)}px sans-serif`;
+    ctx.fillText(prod.name.toUpperCase(), w * 0.5, h * 0.89);
+  }, 256, 128);
+  wrapLabelCache.set(prod.id, tex);
   return tex;
 }
 
 function productMesh(prod) {
   const g = new THREE.Group();
-  const body = mat(prod.color);
   const shape = prod.shape;
 
-  if (shape === "cyl") {
-    const can = new THREE.Mesh(new THREE.CylinderGeometry(0.085, 0.085, 0.26, 12), body);
-    can.position.y = 0.13;
-    const lid = new THREE.Mesh(new THREE.CylinderGeometry(0.088, 0.088, 0.04, 12), mat(0x3a4a5a));
-    lid.position.y = 0.27;
-    const band = new THREE.Mesh(new THREE.CylinderGeometry(0.086, 0.086, 0.12, 12), mat(TRIM));
-    band.position.y = 0.12;
-    g.add(can, lid, band);
+  if (shape === "cyl") { // labelled can with metal caps
+    const sideMat = new THREE.MeshStandardMaterial({ map: wrapLabel(prod), roughness: 0.5, metalness: 0.1 });
+    const capMat = mat(0xc2c6cc, { roughness: 0.3, metalness: 0.75 });
+    const can = new THREE.Mesh(new THREE.CylinderGeometry(0.085, 0.085, 0.26, 22), [sideMat, capMat, capMat]);
+    can.position.y = 0.14;
+    const rimT = new THREE.Mesh(new THREE.CylinderGeometry(0.089, 0.089, 0.02, 22), capMat); rimT.position.y = 0.27;
+    const rimB = rimT.clone(); rimB.position.y = 0.01;
+    g.add(can, rimT, rimB);
   } else if (shape === "bottle") {
-    const b = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.07, 0.26, 12), body);
-    b.position.y = 0.13;
-    const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.035, 0.07, 10), body);
-    neck.position.y = 0.29;
-    const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.04, 10), mat(0x2b2d42));
-    cap.position.y = 0.34;
-    const lbl = new THREE.Mesh(new THREE.CylinderGeometry(0.062, 0.072, 0.13, 12), mat(TRIM));
-    lbl.position.y = 0.12;
-    g.add(b, neck, cap, lbl);
+    const glass = mat(prod.color, { roughness: 0.2, metalness: 0.05 });
+    const body = new THREE.Mesh(new THREE.CylinderGeometry(0.062, 0.07, 0.2, 18), glass); body.position.y = 0.12;
+    const shoulder = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.062, 0.06, 16), glass); shoulder.position.y = 0.25;
+    const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.026, 0.03, 0.05, 12), glass); neck.position.y = 0.3;
+    const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.032, 0.032, 0.05, 12), mat(0x2b2d42, { roughness: 0.4 })); cap.position.y = 0.34;
+    const lbl = new THREE.Mesh(new THREE.CylinderGeometry(0.064, 0.072, 0.13, 18, 1, true),
+      new THREE.MeshStandardMaterial({ map: wrapLabel(prod), roughness: 0.6 })); lbl.position.y = 0.11;
+    g.add(body, shoulder, neck, cap, lbl);
   } else if (shape === "tube") {
-    const t = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.34, 10), body);
-    t.position.y = 0.18;
-    const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.034, 0.034, 0.05, 10), mat(0x2b2d42));
-    cap.position.y = 0.35;
-    g.add(t, cap);
-  } else if (shape === "bag") {
-    const bag = new THREE.Mesh(new THREE.SphereGeometry(0.105, 8, 6), body);
-    bag.scale.set(1, 1.3, 0.7);
-    bag.position.y = 0.14;
-    const stripe = new THREE.Mesh(new THREE.BoxGeometry(0.19, 0.07, 0.14), mat(TRIM));
-    stripe.position.y = 0.14;
-    const clip = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.035, 0.04), mat(0x495057));
-    clip.position.y = 0.29;
-    g.add(bag, stripe, clip);
-  } else if (shape === "bar") {
-    const bar = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.08, 0.1), body);
-    bar.position.y = 0.18; bar.rotation.z = 0.02;
-    const endA = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.1, 0.12), mat(0x2b2d42));
-    endA.position.set(-0.2, 0.18, 0);
-    const endB = endA.clone(); endB.position.x = 0.2;
-    const stand = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.18, 0.08), mat(0x495057));
-    stand.position.y = 0.09;
-    g.add(bar, endA, endB, stand);
+    const t = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.34, 16), mat(prod.color, { roughness: 0.3, metalness: 0.2 })); t.position.y = 0.18;
+    const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.034, 0.034, 0.05, 16), mat(0x2b2d42)); cap.position.y = 0.36;
+    const ring = new THREE.Mesh(new THREE.CylinderGeometry(0.032, 0.032, 0.08, 16, 1, true),
+      new THREE.MeshStandardMaterial({ map: wrapLabel(prod), roughness: 0.6 })); ring.position.y = 0.15;
+    g.add(t, cap, ring);
+  } else if (shape === "bag") { // crimped pouch with a front label
+    const pouch = new THREE.Mesh(rbox(0.22, 0.26, 0.1, 0.05), mat(prod.color, { roughness: 0.9 })); pouch.position.y = 0.15;
+    const crimp = new THREE.Mesh(new THREE.BoxGeometry(0.23, 0.035, 0.11), mat(0x4a5560, { roughness: 0.8 })); crimp.position.y = 0.29;
+    const label = new THREE.Mesh(new THREE.PlaneGeometry(0.18, 0.21),
+      new THREE.MeshStandardMaterial({ map: productLabel(prod), roughness: 0.85 })); label.position.set(0, 0.15, 0.052);
+    g.add(pouch, crimp, label);
+  } else if (shape === "bar") { // sleek LED light bar
+    const housing = new THREE.Mesh(rbox(0.42, 0.06, 0.1, 0.025), mat(0x2b2d42, { roughness: 0.35, metalness: 0.5 })); housing.position.y = 0.21;
+    const strip = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.02, 0.06),
+      new THREE.MeshBasicMaterial({ color: new THREE.Color(prod.color).multiplyScalar(1.15) })); strip.position.set(0, 0.178, 0.03);
+    const legA = new THREE.Mesh(rbox(0.05, 0.18, 0.09, 0.02), mat(0x495057)); legA.position.set(-0.19, 0.09, 0);
+    const legB = legA.clone(); legB.position.x = 0.19;
+    g.add(housing, strip, legA, legB);
   } else if (shape === "castle") {
-    const stone = mat(prod.color);
-    const keep = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.22, 0.18), stone);
-    keep.position.y = 0.11; g.add(keep);
+    const stone = mat(prod.color, { roughness: 0.95 });
+    const keep = new THREE.Mesh(rbox(0.22, 0.22, 0.18, 0.02), stone); keep.position.y = 0.12; g.add(keep);
     for (const sx of [-0.11, 0.11]) {
-      const turret = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.055, 0.3, 8), stone);
-      turret.position.set(sx, 0.15, 0); g.add(turret);
-      const roof = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.08, 8), mat(0xc1121f));
-      roof.position.set(sx, 0.34, 0); g.add(roof);
+      const turret = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.055, 0.3, 10), stone); turret.position.set(sx, 0.16, 0); g.add(turret);
+      const roof = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.08, 10), mat(0xc1121f, { roughness: 0.6 })); roof.position.set(sx, 0.35, 0); g.add(roof);
+      const win = new THREE.Mesh(new THREE.CircleGeometry(0.014, 8), mat(0x1a1410)); win.position.set(sx, 0.18, 0.058); g.add(win);
     }
-    const door = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.1, 0.02), mat(0x2b2118));
-    door.position.set(0, 0.06, 0.095); g.add(door);
+    const door = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.1, 0.02), mat(0x2b2118)); door.position.set(0, 0.07, 0.095); g.add(door);
   } else if (shape === "wood") {
     const r = seededRand(prod.id.length * 17 + 3);
-    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.07, 0.3, 6), body);
-    trunk.position.y = 0.16; trunk.rotation.z = 0.3;
-    g.add(trunk);
-    for (let i = 0; i < 3; i++) {
-      const branch = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.035, 0.13 + r() * 0.1, 5), body);
-      branch.position.set((r() - 0.5) * 0.12, 0.18 + r() * 0.12, (r() - 0.5) * 0.08);
-      branch.rotation.z = (r() - 0.5) * 1.6;
-      branch.rotation.x = (r() - 0.5) * 1.0;
+    const woodMat = mat(prod.color, { roughness: 1 });
+    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.075, 0.3, 7), woodMat); trunk.position.y = 0.16; trunk.rotation.z = 0.3; g.add(trunk);
+    for (let i = 0; i < 4; i++) {
+      const branch = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.035, 0.13 + r() * 0.12, 6), woodMat);
+      branch.position.set((r() - 0.5) * 0.14, 0.16 + r() * 0.14, (r() - 0.5) * 0.08);
+      branch.rotation.z = (r() - 0.5) * 1.7; branch.rotation.x = (r() - 0.5) * 1.1;
       g.add(branch);
     }
-  } else { // box with printed front label
-    const front = new THREE.MeshLambertMaterial({ map: productLabel(prod) });
-    const side = mat(prod.color);
-    const top = mat(lightenColor(prod.color));
-    const box = new THREE.Mesh(
-      new THREE.BoxGeometry(0.22, 0.28, 0.16),
-      [side, side, top, side, front, side]
-    );
-    box.position.y = 0.14;
-    g.add(box);
+  } else { // box with rounded body + clean front label
+    const box = new THREE.Mesh(rbox(0.22, 0.28, 0.16, 0.022), mat(prod.color, { roughness: 0.7 })); box.position.y = 0.14;
+    const label = new THREE.Mesh(new THREE.PlaneGeometry(0.19, 0.25),
+      new THREE.MeshStandardMaterial({ map: productLabel(prod), roughness: 0.75 })); label.position.set(0, 0.14, 0.082);
+    g.add(box, label);
   }
   return g;
-}
-
-// lighten a colour int (for box tops)
-function lightenColor(c) {
-  const [r, g, b] = rgbOf(c);
-  return (Math.min(255, r + 40) << 16) | (Math.min(255, g + 40) << 8) | Math.min(255, b + 40);
 }
 
 export class ShelfUnit {
