@@ -3,7 +3,7 @@ import * as THREE from "three";
 import { RoundedBoxGeometry } from "../lib/jsm/RoundedBoxGeometry.js";
 import {
   STORE, TANK_SLOTS, SHELF_SLOTS, COUNTER, PALLET,
-  SHELF_ROWS, ROW_CAP, item, FISH, FRAGRACK_SLOTS,
+  SHELF_ROWS, ROW_CAP, item, FISH, FRAGRACK_SLOTS, TANK_COLS, TANK_ROW_Y,
 } from "./data.js";
 
 // PBR material so surfaces pick up the room environment (reflections, softer
@@ -87,6 +87,54 @@ function makeAisleSign(text, bg) {
     ctx.textAlign = "center"; ctx.textBaseline = "middle";
     ctx.fillText(text, 256, 68);
   }, 512, 128);
+}
+
+// Continuous built-in cabinetry that frames the grid of wall tanks.
+function buildTankWall(scene, colliders) {
+  const x = -9.0;
+  const navy = mat(NAVY, { roughness: 0.55 });
+  const trimMat = mat(TRIM, { roughness: 0.6 });
+  const frameMat = mat(0x14161b, { roughness: 0.5, metalness: 0.4 });
+  const zMin = -6.5, zMax = 6.5, zLen = zMax - zMin;
+  const baseY = TANK_ROW_Y[0], topY = TANK_ROW_Y[1], tankH = 0.82;
+
+  // base cabinet under the bottom row + toe kick
+  const base = new THREE.Mesh(rbox(0.62, baseY, zLen, 0.04), navy);
+  base.position.set(x, baseY / 2, 0); base.castShadow = true; scene.add(base);
+  const kick = new THREE.Mesh(new THREE.BoxGeometry(0.64, 0.1, zLen), mat(0x14253c));
+  kick.position.set(x, 0.05, 0); scene.add(kick);
+  const baseTrim = new THREE.Mesh(new THREE.BoxGeometry(0.64, 0.05, zLen + 0.04), trimMat);
+  baseTrim.position.set(x, baseY - 0.02, 0); scene.add(baseTrim);
+
+  // back panel against the wall
+  const back = new THREE.Mesh(new THREE.BoxGeometry(0.1, topY + tankH + 0.4, zLen + 0.1), navy);
+  back.position.set(x - 0.34, (topY + tankH + 0.4) / 2, 0); scene.add(back);
+
+  // mid rail between the two rows
+  const mid = new THREE.Mesh(new THREE.BoxGeometry(0.64, baseY + tankH + 0.06 - (baseY + tankH), zLen), navy);
+  const midRail = new THREE.Mesh(new THREE.BoxGeometry(0.64, 0.12, zLen), navy);
+  midRail.position.set(x, baseY + tankH + 0.06, 0); scene.add(midRail);
+  void mid;
+
+  // vertical dividers between/around columns
+  const gaps = [zMin];
+  for (let i = 0; i < TANK_COLS.length - 1; i++) gaps.push((TANK_COLS[i] + TANK_COLS[i + 1]) / 2);
+  gaps.push(zMax);
+  for (const gz of gaps) {
+    const post = new THREE.Mesh(new THREE.BoxGeometry(0.66, topY + tankH - baseY, 0.14), frameMat);
+    post.position.set(x, baseY + (topY + tankH - baseY) / 2, gz); scene.add(post);
+  }
+
+  // lit top valance
+  const valance = new THREE.Mesh(rbox(0.72, 0.34, zLen + 0.06, 0.04), navy);
+  valance.position.set(x, topY + tankH + 0.27, 0); scene.add(valance);
+  const valTrim = new THREE.Mesh(new THREE.BoxGeometry(0.74, 0.05, zLen + 0.08), trimMat);
+  valTrim.position.set(x, topY + tankH + 0.12, 0); scene.add(valTrim);
+  const valLED = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.06, zLen - 0.2),
+    new THREE.MeshBasicMaterial({ color: new THREE.Color(0xeaf6ff).multiplyScalar(1.4) }));
+  valLED.position.set(x + 0.28, topY + tankH + 0.1, 0); scene.add(valLED);
+
+  colliders.push({ minX: -10, maxX: -8.45, minZ: zMin - 0.2, maxZ: zMax + 0.2 });
 }
 
 export function buildRoom(scene, colliders) {
@@ -362,6 +410,8 @@ export function buildRoom(scene, colliders) {
   pallet.position.set(PALLET.x, 0.07, PALLET.z);
   pallet.receiveShadow = true;
   scene.add(pallet);
+
+  buildTankWall(scene, colliders);
 }
 
 /* ---------------- Fish art assets (Kenney Fish Pack, CC0) ---------------- */
@@ -1092,183 +1142,119 @@ function makeCausticTexture() {
   return t;
 }
 
-const MAIN_Y = 0.8;           // main tank base height
-const MAIN_H = 0.95;          // main tank height
-const DECO_Y = MAIN_Y + MAIN_H + 0.09; // upper display tank base
+const TANK_W = 3.0;    // wide dimension (local x)
+const TANK_D = 0.55;   // depth (local z); front face is +z
+const TANK_H = 0.82;   // interior height (local y, base at 0)
+const FLOOR_Y = 0.07;  // gravel top
 
+// A single built-in tank set into the wall grid (positioned by slot.y per row).
 export class TankUnit {
   constructor(scene, colliders, slotIndex) {
     this.slotIndex = slotIndex;
     const slot = TANK_SLOTS[slotIndex];
     this.group = new THREE.Group();
-    this.group.position.set(slot.x, 0, slot.z);
+    this.group.position.set(slot.x, slot.y, slot.z);
     this.group.rotation.y = slot.rotY;
+    const frontZ = TANK_D / 2;
 
-    const navyMat = mat(NAVY, { roughness: 0.55 });
-    const trimMat = mat(TRIM, { roughness: 0.6 });
-
-    // cabinet base
-    const cabinet = new THREE.Mesh(rbox(2.0, MAIN_Y, 0.78, 0.05), navyMat);
-    cabinet.position.y = MAIN_Y / 2;
-    cabinet.castShadow = true;
-    const kick = new THREE.Mesh(rbox(2.0, 0.08, 0.8, 0.03), mat(0x14253c));
-    kick.position.y = 0.04;
-    const cabTrim = new THREE.Mesh(rbox(2.02, 0.06, 0.8, 0.025), trimMat);
-    cabTrim.position.y = MAIN_Y - 0.03;
-
-    // main tank: glowing back panel, water, glass
+    // glowing back panel
     this.glowMat = new THREE.MeshBasicMaterial({ color: 0x3ec3f7 });
-    const glow = new THREE.Mesh(new THREE.PlaneGeometry(1.86, MAIN_H - 0.12), this.glowMat);
-    glow.position.set(0, MAIN_Y + MAIN_H / 2, -0.3);
+    const glow = new THREE.Mesh(new THREE.PlaneGeometry(TANK_W - 0.08, TANK_H - 0.06), this.glowMat);
+    glow.position.set(0, TANK_H / 2, -TANK_D / 2 + 0.015);
 
     this.waterMat = new THREE.MeshStandardMaterial({ color: 0x4fb4e0, transparent: true, opacity: 0.26, roughness: 0.1, metalness: 0 });
-    this.water = new THREE.Mesh(new THREE.BoxGeometry(1.86, MAIN_H - 0.18, 0.58), this.waterMat);
-    this.water.position.y = MAIN_Y + (MAIN_H - 0.18) / 2 + 0.1;
+    this.water = new THREE.Mesh(new THREE.BoxGeometry(TANK_W - 0.06, TANK_H - 0.16, TANK_D - 0.06), this.waterMat);
+    this.water.position.y = FLOOR_Y + (TANK_H - 0.16) / 2;
 
-    // reflective glass: low roughness + env map reflections
     const glassMat = new THREE.MeshStandardMaterial({
-      color: 0xeaffff, transparent: true, opacity: 0.16, roughness: 0.04, metalness: 0, envMapIntensity: 1.4,
+      color: 0xeaffff, transparent: true, opacity: 0.14, roughness: 0.04, metalness: 0, envMapIntensity: 1.5,
     });
-    this.glass = new THREE.Mesh(rbox(1.94, MAIN_H, 0.7, 0.04), glassMat);
-    this.glass.position.y = MAIN_Y + MAIN_H / 2;
+    this.glass = new THREE.Mesh(rbox(TANK_W, TANK_H, TANK_D, 0.02), glassMat);
+    this.glass.position.y = TANK_H / 2;
     this.glass.userData.interact = { type: "tank", unit: this };
 
-    const gravel = new THREE.Mesh(new THREE.BoxGeometry(1.86, 0.08, 0.58), mat(0xc9a86b, { roughness: 1 }));
-    gravel.position.y = MAIN_Y + 0.06;
+    const gravel = new THREE.Mesh(new THREE.BoxGeometry(TANK_W - 0.06, 0.08, TANK_D - 0.06), mat(0xc9a86b, { roughness: 1 }));
+    gravel.position.y = FLOOR_Y;
 
-    // hood between tiers with a light strip
-    const hood = new THREE.Mesh(rbox(2.0, 0.1, 0.76, 0.04), navyMat);
-    hood.position.y = MAIN_Y + MAIN_H + 0.04;
-    const strip = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.025, 0.5),
+    // slim built-in black frame around the front opening
+    const frameMat = mat(0x14161b, { roughness: 0.5, metalness: 0.4 });
+    const fThk = 0.05;
+    const frame = [];
+    frame.push(new THREE.Mesh(new THREE.BoxGeometry(TANK_W, fThk, 0.06), frameMat)); frame[0].position.set(0, TANK_H, frontZ);
+    frame.push(new THREE.Mesh(new THREE.BoxGeometry(TANK_W, fThk, 0.06), frameMat)); frame[1].position.set(0, 0, frontZ);
+    frame.push(new THREE.Mesh(new THREE.BoxGeometry(fThk, TANK_H, 0.06), frameMat)); frame[2].position.set(-TANK_W / 2, TANK_H / 2, frontZ);
+    frame.push(new THREE.Mesh(new THREE.BoxGeometry(fThk, TANK_H, 0.06), frameMat)); frame[3].position.set(TANK_W / 2, TANK_H / 2, frontZ);
+
+    // top light strip + actinic accent
+    const strip = new THREE.Mesh(new THREE.BoxGeometry(TANK_W - 0.2, 0.025, 0.45),
       new THREE.MeshBasicMaterial({ color: new THREE.Color(0xf4fcff).multiplyScalar(1.4) }));
-    strip.position.y = MAIN_Y + MAIN_H - 0.02;
-    // actinic accent bar at the front of the hood (reef-light look)
-    const actinic = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.02, 0.06),
-      new THREE.MeshBasicMaterial({ color: new THREE.Color(0x6a3df0).multiplyScalar(1.3) }));
-    actinic.position.set(0, MAIN_Y + MAIN_H - 0.02, 0.28);
+    strip.position.set(0, TANK_H - 0.03, 0);
+    const actinic = new THREE.Mesh(new THREE.BoxGeometry(TANK_W - 0.3, 0.02, 0.06),
+      new THREE.MeshBasicMaterial({ color: new THREE.Color(0x6a3df0).multiplyScalar(1.25) }));
+    actinic.position.set(0, TANK_H - 0.03, frontZ - 0.1);
 
-    // shimmering water surface near the top of the tank
-    this.surfaceMat = new THREE.MeshBasicMaterial({
-      color: 0xbff0ff, transparent: true, opacity: 0.14,
-      blending: THREE.AdditiveBlending, depthWrite: false,
-    });
-    const surface = new THREE.Mesh(new THREE.PlaneGeometry(1.82, 0.6), this.surfaceMat);
-    surface.rotation.x = -Math.PI / 2;
-    surface.position.y = MAIN_Y + MAIN_H - 0.14;
-    this.surface = surface;
+    // shimmering surface + glass reflection streak
+    this.surfaceMat = new THREE.MeshBasicMaterial({ color: 0xbff0ff, transparent: true, opacity: 0.13, blending: THREE.AdditiveBlending, depthWrite: false });
+    const surface = new THREE.Mesh(new THREE.PlaneGeometry(TANK_W - 0.1, TANK_D - 0.06), this.surfaceMat);
+    surface.rotation.x = -Math.PI / 2; surface.position.y = TANK_H - 0.1;
+    const highlight = new THREE.Mesh(new THREE.PlaneGeometry(0.5, TANK_H * 1.2),
+      new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.06, blending: THREE.AdditiveBlending, depthWrite: false }));
+    highlight.position.set(-TANK_W * 0.28, TANK_H / 2, frontZ - 0.02); highlight.rotation.z = 0.5;
 
-    // angled reflection streak on the front glass
-    const highlight = new THREE.Mesh(new THREE.PlaneGeometry(0.4, MAIN_H * 1.2),
-      new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.07, blending: THREE.AdditiveBlending, depthWrite: false }));
-    highlight.position.set(-0.45, MAIN_Y + MAIN_H / 2, 0.36);
-    highlight.rotation.z = 0.5;
+    this.group.add(glow, this.water, this.glass, gravel, ...frame, strip, actinic, surface, highlight);
 
-    this.group.add(cabinet, kick, cabTrim, glow, this.water, this.glass, gravel, hood, strip, actinic, surface, highlight);
-
-    // upper decorative display tank (ambient fish, pure vibes)
-    const decoH = 0.5;
-    const decoGlow = new THREE.Mesh(new THREE.PlaneGeometry(1.86, decoH - 0.08),
-      new THREE.MeshBasicMaterial({ color: new THREE.Color(0x59d1f9).multiplyScalar(1.15) }));
-    decoGlow.position.set(0, DECO_Y + decoH / 2, -0.28);
-    const decoWater = new THREE.Mesh(new THREE.BoxGeometry(1.86, decoH - 0.1, 0.52),
-      new THREE.MeshStandardMaterial({ color: 0x4fb4e0, transparent: true, opacity: 0.22, roughness: 0.1 }));
-    decoWater.position.y = DECO_Y + decoH / 2;
-    const decoGlass = new THREE.Mesh(rbox(1.94, decoH, 0.62, 0.035), glassMat);
-    decoGlass.position.y = DECO_Y + decoH / 2;
-    const cap = new THREE.Mesh(rbox(2.0, 0.09, 0.7, 0.04), navyMat);
-    cap.position.y = DECO_Y + decoH + 0.045;
-    const capTrim = new THREE.Mesh(rbox(2.02, 0.04, 0.72, 0.02), trimMat);
-    capTrim.position.y = DECO_Y + decoH + 0.11;
-    this.group.add(decoGlow, decoWater, decoGlass, cap, capTrim);
-
-    addContactShadow(this.group, 2.4, 1.1);
     this.addDecorations();
     this.addBubbles();
     this.addCaustics();
     this.addFloaties();
-    this.addAmbientFish();
     scene.add(this.group);
 
-    const cx = slot.x, cz = slot.z;
-    const hw = slot.rotY === 0 ? 1.0 : 0.4, hd = slot.rotY === 0 ? 0.4 : 1.0;
-    colliders.push({ minX: cx - hw, maxX: cx + hw, minZ: cz - hd, maxZ: cz + hd });
-
-    this.fishMeshes = []; // { mesh, tail, species, school, target, speed, phase }
+    this.fishMeshes = [];
     this.schoolAnchors = {};
     this.time = Math.random() * 10;
   }
 
   addDecorations() {
     const r = seededRand(this.slotIndex + 7);
-    const floorY = MAIN_Y + 0.1;
+    const floorY = FLOOR_Y + 0.03;
+    const HW = TANK_W / 2 - 0.25, HD = TANK_D / 2 - 0.1;
     this.swayers = [];
-
-    // A reef garden of distinct coral pieces spread across the tank floor.
     const builders = [
-      (c) => buildStaghorn(c, r),
-      (c) => buildBrain(c),
-      (c) => buildFan(c, r),
-      (c) => buildTube(c, r),
-      (c) => buildAnemone(c, r, this.swayers),
-      (c) => buildBubble(c, r),
-      (c) => buildMushroom(c, r),
-      (c) => buildPillar(c, r),
+      (c) => buildStaghorn(c, r), (c) => buildBrain(c), (c) => buildFan(c, r),
+      (c) => buildTube(c, r), (c) => buildAnemone(c, r, this.swayers),
+      (c) => buildBubble(c, r), (c) => buildMushroom(c, r), (c) => buildPillar(c, r),
     ];
     const n = 4 + Math.floor(r() * 3);
     const used = [];
     for (let i = 0; i < n; i++) {
-      // avoid repeating the same coral type twice in a row
       let bi; do { bi = Math.floor(r() * builders.length); } while (used.length && used[used.length - 1] === bi && r() < 0.7);
       used.push(bi);
       const color = CORAL_PALETTE[Math.floor(r() * CORAL_PALETTE.length)];
       const piece = builders[bi](color);
-      piece.scale.setScalar(0.8 + r() * 0.6);
-      const x = -0.74 + (i + 0.2 + r() * 0.5) * (1.48 / n);
-      piece.position.set(x, floorY, (r() - 0.5) * 0.34);
+      piece.scale.setScalar(0.75 + r() * 0.5);
+      piece.position.set(-HW + (i + 0.2 + r() * 0.5) * (2 * HW / n), floorY, (r() - 0.5) * 2 * HD);
       this.group.add(piece);
     }
-
-    // ground creatures — a clam, starfish, or urchin or two
     const creatures = [(c) => buildClam(c), (c) => buildStarfish(c), (c) => buildUrchin(c)];
     const cn = Math.floor(r() * 2.4);
     for (let i = 0; i < cn; i++) {
-      const color = CORAL_PALETTE[Math.floor(r() * CORAL_PALETTE.length)];
-      const cr = creatures[Math.floor(r() * creatures.length)](color);
+      const cr = creatures[Math.floor(r() * creatures.length)](CORAL_PALETTE[Math.floor(r() * CORAL_PALETTE.length)]);
       cr.scale.setScalar(0.8 + r() * 0.5);
-      cr.position.set(-0.7 + r() * 1.4, floorY, (r() - 0.5) * 0.4);
+      cr.position.set((r() - 0.5) * 2 * HW, floorY, (r() - 0.5) * 2 * HD);
       cr.rotation.y = r() * Math.PI * 2;
       this.group.add(cr);
     }
-
-    // a rock or two as a base
     for (let p = 0; p < 2 + Math.floor(r() * 2); p++) {
-      const peb = new THREE.Mesh(new THREE.SphereGeometry(0.03 + r() * 0.035, 6, 5),
-        mat(p % 2 ? 0x8d99ae : 0xadb5bd));
-      peb.position.set(-0.7 + r() * 1.4, floorY + 0.01, (r() - 0.5) * 0.38);
-      peb.scale.y = 0.55;
+      const peb = new THREE.Mesh(new THREE.SphereGeometry(0.03 + r() * 0.035, 6, 5), mat(p % 2 ? 0x8d99ae : 0xadb5bd));
+      peb.position.set((r() - 0.5) * 2 * HW, floorY, (r() - 0.5) * 2 * HD); peb.scale.y = 0.55;
       this.group.add(peb);
     }
-
-    // seaweed strands for greenery
     const nWeed = 2 + Math.floor(r() * 3);
     for (let w = 0; w < nWeed; w++) {
-      const x = -0.75 + r() * 1.5, z = (r() - 0.5) * 0.36;
-      const h = 0.3 + r() * 0.4;
+      const h = 0.25 + r() * 0.35;
       const weed = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.02, h, 5), coralMat(0x52b788, 0.12));
-      weed.position.set(x, floorY + h / 2, z);
+      weed.position.set((r() - 0.5) * 2 * HW, floorY + h / 2, (r() - 0.5) * 2 * HD);
       weed.rotation.z = (r() - 0.5) * 0.3;
-      this.group.add(weed);
-    }
-
-    // small coral + plants in the upper display tank too
-    for (let w = 0; w < 2; w++) {
-      const small = buildStaghorn(CORAL_PALETTE[Math.floor(r() * CORAL_PALETTE.length)], r);
-      small.scale.setScalar(0.5 + r() * 0.2);
-      small.position.set(-0.6 + r() * 1.2, DECO_Y + 0.04, (r() - 0.5) * 0.28);
-      this.group.add(small);
-      const h = 0.16 + r() * 0.16;
-      const weed = new THREE.Mesh(new THREE.CylinderGeometry(0.009, 0.016, h, 5), coralMat(0x74c69d, 0.12));
-      weed.position.set(-0.75 + r() * 1.5, DECO_Y + 0.04 + h / 2, (r() - 0.5) * 0.3);
       this.group.add(weed);
     }
   }
@@ -1277,56 +1263,31 @@ export class TankUnit {
     this.bubbles = [];
     const bubMat = new THREE.MeshBasicMaterial({ color: 0xe8fbff, transparent: true, opacity: 0.55 });
     const r = seededRand(this.slotIndex + 31);
-    const bx = -0.6 + r() * 1.2, bz = (r() - 0.5) * 0.3;
+    const bx = (r() - 0.5) * (TANK_W - 0.6), bz = (r() - 0.5) * 0.3;
     for (let i = 0; i < 5; i++) {
-      const b = new THREE.Mesh(new THREE.SphereGeometry(0.012 + r() * 0.012, 5, 4), bubMat);
-      b.position.set(bx, MAIN_Y + 0.15 + r() * (MAIN_H - 0.3), bz);
-      b.userData.speed = 0.12 + r() * 0.1;
-      b.userData.wob = r() * 6;
-      this.group.add(b);
-      this.bubbles.push(b);
+      const b = new THREE.Mesh(new THREE.SphereGeometry(0.011 + r() * 0.011, 5, 4), bubMat);
+      b.position.set(bx, FLOOR_Y + 0.1 + r() * (TANK_H - 0.25), bz);
+      b.userData.speed = 0.12 + r() * 0.1; b.userData.wob = r() * 6;
+      this.group.add(b); this.bubbles.push(b);
     }
   }
 
-  // moving light caustics rippling across the substrate
   addCaustics() {
     this.causticTex = makeCausticTexture();
-    const mat0 = new THREE.MeshBasicMaterial({
-      map: this.causticTex, transparent: true, opacity: 0.2,
-      blending: THREE.AdditiveBlending, depthWrite: false,
-    });
-    const c = new THREE.Mesh(new THREE.PlaneGeometry(1.8, 0.58), mat0);
-    c.rotation.x = -Math.PI / 2;
-    c.position.set(0, MAIN_Y + 0.14, 0);
+    const c = new THREE.Mesh(new THREE.PlaneGeometry(TANK_W - 0.1, TANK_D - 0.06),
+      new THREE.MeshBasicMaterial({ map: this.causticTex, transparent: true, opacity: 0.2, blending: THREE.AdditiveBlending, depthWrite: false }));
+    c.rotation.x = -Math.PI / 2; c.position.y = FLOOR_Y + 0.05;
     this.group.add(c);
   }
 
-  // slow drifting motes for underwater depth
   addFloaties() {
     this.floaties = [];
     const fm = new THREE.MeshBasicMaterial({ color: 0xeaf6ff, transparent: true, opacity: 0.22 });
     for (let i = 0; i < 7; i++) {
       const s = new THREE.Mesh(new THREE.SphereGeometry(0.006, 5, 4), fm);
-      s.position.set((Math.random() - 0.5) * 1.6, MAIN_Y + 0.2 + Math.random() * 0.6, (Math.random() - 0.5) * 0.4);
-      s.userData.vx = (Math.random() - 0.5) * 0.012;
-      s.userData.vy = (Math.random() - 0.5) * 0.008;
-      this.group.add(s);
-      this.floaties.push(s);
-    }
-  }
-
-  addAmbientFish() {
-    this.ambientFish = [];
-    const r = seededRand(this.slotIndex + 77);
-    const n = 2 + Math.floor(r() * 2);
-    for (let i = 0; i < n; i++) {
-      const species = FISH[Math.floor(r() * FISH.length)];
-      const { group, tail } = buildFishMesh(species, 0.55);
-      const target = () => new THREE.Vector3(
-        (r() - 0.5) * 1.5, DECO_Y + 0.12 + r() * 0.28, (r() - 0.5) * 0.3);
-      group.position.copy(target());
-      this.ambientFish.push({ mesh: group, tail, target: target(), speed: 0.1 + r() * 0.12, phase: r() * 6, newTarget: target });
-      this.group.add(group);
+      s.position.set((Math.random() - 0.5) * (TANK_W - 0.3), FLOOR_Y + 0.1 + Math.random() * (TANK_H - 0.2), (Math.random() - 0.5) * 0.4);
+      s.userData.vx = (Math.random() - 0.5) * 0.012; s.userData.vy = (Math.random() - 0.5) * 0.008;
+      this.group.add(s); this.floaties.push(s);
     }
   }
 
@@ -1353,9 +1314,9 @@ export class TankUnit {
 
   randomSwimPoint() {
     return new THREE.Vector3(
-      (Math.random() - 0.5) * 1.5,
-      MAIN_Y + 0.22 + Math.random() * (MAIN_H - 0.42),
-      (Math.random() - 0.5) * 0.34
+      (Math.random() - 0.5) * (TANK_W - 0.5),
+      0.2 + Math.random() * (TANK_H - 0.36),
+      (Math.random() - 0.5) * (TANK_D - 0.16)
     );
   }
 
@@ -1399,20 +1360,10 @@ export class TankUnit {
       if (f.tail) f.tail.rotation.y = Math.sin(this.time * 9 + f.phase) * 0.5;
       else f.mesh.rotation.z = Math.sin(this.time * 5 + f.phase) * 0.07;
     }
-    for (const f of this.ambientFish) {
-      const d = f.target.clone().sub(f.mesh.position);
-      if (d.length() < 0.06) { f.target = f.newTarget(); continue; }
-      d.normalize();
-      f.mesh.position.addScaledVector(d, f.speed * dt);
-      const yaw = Math.atan2(-d.z, d.x);
-      f.mesh.rotation.y += (yaw - f.mesh.rotation.y) * Math.min(1, dt * 4);
-      if (f.tail) f.tail.rotation.y = Math.sin(this.time * 8 + f.phase) * 0.5;
-      else f.mesh.rotation.z = Math.sin(this.time * 5 + f.phase) * 0.07;
-    }
     for (const b of this.bubbles) {
       b.position.y += b.userData.speed * dt;
       b.position.x += Math.sin(this.time * 3 + b.userData.wob) * 0.01 * dt * 60;
-      if (b.position.y > MAIN_Y + MAIN_H - 0.12) b.position.y = MAIN_Y + 0.15;
+      if (b.position.y > TANK_H - 0.1) b.position.y = FLOOR_Y + 0.1;
     }
     if (this.swayers) {
       for (const s of this.swayers) {
@@ -1429,9 +1380,10 @@ export class TankUnit {
       for (const f of this.floaties) {
         f.position.x += f.userData.vx * dt;
         f.position.y += f.userData.vy * dt;
-        if (f.position.x < -0.85) f.position.x = 0.85; else if (f.position.x > 0.85) f.position.x = -0.85;
-        if (f.position.y < MAIN_Y + 0.15) f.position.y = MAIN_Y + MAIN_H - 0.15;
-        else if (f.position.y > MAIN_Y + MAIN_H - 0.15) f.position.y = MAIN_Y + 0.15;
+        const bx = TANK_W / 2 - 0.15;
+        if (f.position.x < -bx) f.position.x = bx; else if (f.position.x > bx) f.position.x = -bx;
+        if (f.position.y < FLOOR_Y + 0.1) f.position.y = TANK_H - 0.15;
+        else if (f.position.y > TANK_H - 0.15) f.position.y = FLOOR_Y + 0.1;
       }
     }
   }

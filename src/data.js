@@ -138,16 +138,12 @@ export const MAX_SHELF_SLOTS = 8;
 
 export const STORE = { halfW: 10, halfD: 7, wallH: 3.4, doorHalf: 1.3 };
 
-// rotY faces the unit's front toward the aisle.
+// Built-in tank wall on the west side: a 4-column x 2-row grid (y = row base).
+// Owned tanks fill the bottom row first, then the top row.
+export const TANK_COLS = [-4.8, -1.6, 1.6, 4.8];
+export const TANK_ROW_Y = [0.92, 1.82];
 export const TANK_SLOTS = [
-  { x: -9.0, z: -5.4, rotY: Math.PI / 2 },
-  { x: -9.0, z: -3.2, rotY: Math.PI / 2 },
-  { x: -9.0, z: -1.0, rotY: Math.PI / 2 },
-  { x: -9.0, z: 1.2,  rotY: Math.PI / 2 },
-  { x: -9.0, z: 3.4,  rotY: Math.PI / 2 },
-  { x: -9.0, z: 5.6,  rotY: Math.PI / 2 },
-  { x: -6.2, z: -6.3, rotY: 0 },
-  { x: -3.8, z: -6.3, rotY: 0 },
+  ...TANK_ROW_Y.flatMap((y) => TANK_COLS.map((z) => ({ x: -9.0, y, z, rotY: Math.PI / 2 }))),
 ];
 
 export const SHELF_SLOTS = [
@@ -163,8 +159,7 @@ export const SHELF_SLOTS = [
 ];
 
 // Browse spots (where a customer stands to look at a unit).
-export const tankBrowseSpot = (s) =>
-  s.rotY === 0 ? { x: s.x, z: s.z + 1.3 } : { x: s.x + 1.4, z: s.z };
+export const tankBrowseSpot = (s) => ({ x: s.x + 1.7, z: s.z });
 export const shelfBrowseSpot = (s) => {
   if (s.rotY === 0) return { x: s.x, z: s.z + 1.3 };
   if (s.rotY === Math.PI) return { x: s.x, z: s.z - 1.3 };
