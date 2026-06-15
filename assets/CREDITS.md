@@ -11,3 +11,10 @@ These assets are dedicated to the public domain. Attribution is not
 required but is given here as a courtesy. In-game, several species reuse
 these base shapes recolored at runtime (hue/saturation tint, original
 shading preserved).
+
+## Character model — Quaternius
+- File: `models/character.glb` (rigged human with Walk/Idle/Run/etc. animations)
+- Author: Quaternius (https://quaternius.com)
+- License: Creative Commons Zero (CC0 1.0) — public domain.
+
+Used for shopper NPCs (cloned per customer with its own animation mixer).
