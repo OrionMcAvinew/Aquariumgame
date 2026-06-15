@@ -1119,6 +1119,22 @@ function buildUrchin(color) {
   return g;
 }
 
+// Natural rock formation / cave centerpiece (freshwater aquascape look)
+function buildRockMound(rand, scale = 1) {
+  const g = new THREE.Group();
+  const mats = [mat(0x6b5642, { roughness: 0.95 }), mat(0x8a7559, { roughness: 0.95 }), mat(0x55504a, { roughness: 0.95 })];
+  const n = 5 + Math.floor(rand() * 3);
+  for (let i = 0; i < n; i++) {
+    const rr = (0.07 + rand() * 0.07) * scale;
+    const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(rr, 0), mats[Math.floor(rand() * 3)]);
+    rock.position.set((rand() - 0.5) * 0.3 * scale, rr * 0.65 + i * 0.015, (rand() - 0.5) * 0.14);
+    rock.rotation.set(rand() * 3, rand() * 3, rand() * 3);
+    rock.scale.set(1 + rand() * 0.4, 0.7 + rand() * 0.3, 1 + rand() * 0.4);
+    g.add(rock);
+  }
+  return g;
+}
+
 // soft tileable caustic light texture (cached), cloned per tank for offset
 let _causticBase = null;
 function makeCausticTexture() {
@@ -1224,6 +1240,11 @@ export class TankUnit {
       (c) => buildTube(c, r), (c) => buildAnemone(c, r, this.swayers),
       (c) => buildBubble(c, r), (c) => buildMushroom(c, r), (c) => buildPillar(c, r),
     ];
+    // a natural rock formation as the centerpiece
+    const mound = buildRockMound(r, 0.9 + r() * 0.4);
+    mound.position.set((r() - 0.5) * HW, floorY, -HD * 0.3);
+    this.group.add(mound);
+
     const n = 4 + Math.floor(r() * 3);
     const used = [];
     for (let i = 0; i < n; i++) {
@@ -1977,6 +1998,22 @@ export function buildFragMesh(coral) {
   return g;
 }
 
+// small printed price tag for a frag
+const fragTagCache = new Map();
+function fragTagTexture(price, color) {
+  const key = price + ":" + color;
+  if (fragTagCache.has(key)) return fragTagCache.get(key);
+  const tex = canvasTexture((ctx, w, h) => {
+    ctx.clearRect(0, 0, w, h);
+    ctx.fillStyle = cssOf(color); roundRectPath(ctx, 2, 2, w - 4, h - 4, 8); ctx.fill();
+    ctx.fillStyle = "#ffffff"; ctx.font = `bold ${Math.round(h * 0.6)}px sans-serif`;
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillText("$" + price, w / 2, h * 0.55);
+  }, 64, 36);
+  fragTagCache.set(key, tex);
+  return tex;
+}
+
 export class FragRack {
   constructor(scene, colliders, slotIndex) {
     this.slotIndex = slotIndex;
@@ -2047,12 +2084,21 @@ export class FragRack {
       const tier = Math.floor(i / perTier);
       if (tier > 2 || !item(cid)) return;
       const idx = i % perTier, col = idx % cols, row = Math.floor(idx / cols);
-      const frag = buildFragMesh(item(cid));
+      const coral = item(cid);
+      const fx = -0.6 + col * 0.6 + (r() - 0.5) * 0.06, fz = -0.15 + row * 0.3;
+      const frag = buildFragMesh(coral);
       frag.scale.setScalar(1.5);
-      frag.position.set(-0.6 + col * 0.6 + (r() - 0.5) * 0.06, this.tierY[tier] + 0.03, -0.15 + row * 0.3);
+      frag.position.set(fx, this.tierY[tier] + 0.03, fz);
       frag.rotation.y = r() * 6.28;
       this.group.add(frag);
       this.fragMeshes.push(frag);
+      // little price tag clipped to the grid in front of the frag
+      const tag = new THREE.Mesh(new THREE.PlaneGeometry(0.11, 0.062),
+        new THREE.MeshBasicMaterial({ map: fragTagTexture(coral.market, coral.color), transparent: true }));
+      tag.position.set(fx, this.tierY[tier] + 0.05, fz + 0.16);
+      tag.rotation.x = -0.9;
+      this.group.add(tag);
+      this.fragMeshes.push(tag);
     });
   }
 }
