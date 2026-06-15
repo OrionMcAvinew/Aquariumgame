@@ -1,6 +1,8 @@
 // Builds the 3D store: room, furniture units (tanks/shelves), delivery boxes.
 import * as THREE from "three";
 import { RoundedBoxGeometry } from "../lib/jsm/RoundedBoxGeometry.js";
+import { GLTFLoader } from "../lib/jsm/loaders/GLTFLoader.js";
+import { clone as cloneSkeleton } from "../lib/jsm/utils/SkeletonUtils.js";
 import {
   STORE, TANK_SLOTS, SHELF_SLOTS, COUNTER, PALLET,
   SHELF_ROWS, ROW_CAP, item, FISH, FRAGRACK_SLOTS, TANK_COLS, TANK_ROW_Y,
@@ -1416,7 +1418,9 @@ export class TankUnit {
 const PROD_ICON = {
   food: "🍤", net: "🥅", gravel: "🪨", plant: "🌿", decor: "🪸", thermo: "🌡️",
   heater: "🔥", pump: "💨", cond: "💧", light: "💡", testkit: "🧪", filter: "⚙️",
-  wood: "🪵", castle: "🏰", kit: "📦", bg: "🖼️",
+  wood: "🪵", castle: "🏰", kit: "📦", bg: "🖼️", airstone: "🫧", vacuum: "🧹", medicine: "💊",
+  shipwreck: "⚓", frozen: "🧊", saltmix: "🧂", powerhead: "🌀", calcium: "🧴", alk: "🧴",
+  wavemaker: "🌊", salinity: "🌡️", skimmer: "🌀", uv: "🔆", reefled: "💡",
 };
 const prodIcon = (p) => PROD_ICON[p.id] || (p.kind === "coral" ? "🪸" : "🐠");
 
@@ -1652,7 +1656,60 @@ const HAIR = [0x2b2d42, 0x6f4518, 0xbf9b30, 0x778da9, 0x431407];
 
 const PANTS = [0x33415c, 0x2b2d42, 0x4a4e69, 0x5a3e2b, 0x355070];
 
+// ---- Animated character model (Quaternius, CC0) ----
+let CHAR_GLTF = null;
+export function loadCharacterModel(url = "assets/models/character.glb") {
+  return new Promise((res) => {
+    new GLTFLoader().load(url, (g) => {
+      g.scene.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.frustumCulled = false; } });
+      CHAR_GLTF = { scene: g.scene, animations: g.animations };
+      res();
+    }, undefined, () => res()); // tolerate failure -> procedural fallback
+  });
+}
+
+function makeBasket() {
+  const basket = new THREE.Group();
+  const tub = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.16, 0.2),
+    mat(Math.random() < 0.5 ? 0xc1121f : 0x2a6f97));
+  const handle = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.03, 0.03), mat(0x343a40));
+  handle.position.y = 0.13;
+  basket.add(tub, handle);
+  basket.visible = false;
+  return basket;
+}
+
+// Real rigged model with walk/idle animation (used for shoppers).
+function buildModelCustomer() {
+  const inner = cloneSkeleton(CHAR_GLTF.scene);
+  const box = new THREE.Box3().setFromObject(inner);
+  const h = Math.max(0.001, box.max.y - box.min.y);
+  const s = 1.72 / h;
+  inner.scale.setScalar(s);
+  inner.position.y = -box.min.y * s;
+  inner.rotation.y = Math.PI; // orient "front" to +z to match the game convention
+  const g = new THREE.Group();
+  g.add(inner);
+
+  const mixer = new THREE.AnimationMixer(inner);
+  const find = (kw) => CHAR_GLTF.animations.find((a) => a.name.toLowerCase().includes(kw));
+  const walkClip = find("walk"), idleClip = find("idle") || find("standing");
+  const actions = {};
+  if (walkClip) actions.walk = mixer.clipAction(walkClip);
+  if (idleClip) { actions.idle = mixer.clipAction(idleClip); actions.idle.play(); }
+
+  const basket = makeBasket();
+  basket.position.set(0.34, 0.74, 0.12);
+  g.add(basket);
+  g.scale.setScalar(0.94 + Math.random() * 0.12);
+  g.userData = { basket, limbs: null, mixer, actions, model: true, anim: "idle" };
+  return g;
+}
+
 export function createCustomerMesh(opts = {}) {
+  // shoppers use the animated model; staff stay procedural (clearly aproned)
+  if (opts.uniform == null && CHAR_GLTF) return buildModelCustomer();
+
   const g = new THREE.Group();
   const shirt = opts.uniform != null ? opts.uniform : SHIRT[(Math.random() * SHIRT.length) | 0];
   const skin = SKIN[(Math.random() * SKIN.length) | 0];

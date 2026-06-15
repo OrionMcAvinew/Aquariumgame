@@ -19,6 +19,9 @@ class Customer {
     this.mesh = createCustomerMesh();
     this.mesh.position.set(SPAWN.x + (Math.random() - 0.5) * 1.5, 0, SPAWN.z);
     this.limbs = this.mesh.userData.limbs;
+    this.mixer = this.mesh.userData.mixer || null; // animated model?
+    this.actions = this.mesh.userData.actions || null;
+    this._anim = "idle";
     game.scene.add(this.mesh);
     this.state = "walk";
     this.path = [{ x: DOOR_IN.x, z: DOOR_IN.z }];
@@ -183,6 +186,17 @@ class Customer {
     this.leave();
   }
 
+  // crossfade the model's animation clips
+  setAction(name) {
+    if (!this.actions || this._anim === name) return;
+    const next = this.actions[name];
+    if (!next) return;
+    const prev = this.actions[this._anim];
+    next.reset().fadeIn(0.2).play();
+    if (prev) prev.fadeOut(0.2);
+    this._anim = name;
+  }
+
   animateLimbs(swing, dt) {
     const L = this.limbs;
     if (!L) return;
@@ -195,6 +209,7 @@ class Customer {
 
   update(dt) {
     const p = this.mesh.position;
+    if (this.mixer) this.mixer.update(dt);
 
     if (this.state === "walk") {
       const wp = this.path[0];
@@ -208,13 +223,17 @@ class Customer {
         p.x += (dx / d) * WALK_SPEED * dt;
         p.z += (dz / d) * WALK_SPEED * dt;
         this.mesh.rotation.y = Math.atan2(dx, dz);
-        this.walkPhase += dt * 9;
-        p.y = Math.abs(Math.sin(this.walkPhase)) * 0.045;
-        this.animateLimbs(Math.sin(this.walkPhase) * 0.6, dt);
+        if (this.mixer) {
+          this.setAction("walk"); // model has its own gait + foot motion
+        } else {
+          this.walkPhase += dt * 9;
+          p.y = Math.abs(Math.sin(this.walkPhase)) * 0.045;
+          this.animateLimbs(Math.sin(this.walkPhase) * 0.6, dt);
+        }
       }
     } else {
-      p.y *= 0.8;
-      this.animateLimbs(0, dt); // ease limbs back to rest when standing
+      if (this.mixer) this.setAction("idle");
+      else { p.y *= 0.8; this.animateLimbs(0, dt); } // ease limbs back to rest when standing
     }
 
     if (this.state === "browse") {

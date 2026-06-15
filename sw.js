@@ -1,6 +1,6 @@
 // Simple offline-first service worker for Fin & Fortune.
 // Bump CACHE when shipping new assets so clients refresh.
-const CACHE = "finfortune-v11";
+const CACHE = "finfortune-v13";
 const ASSETS = [
   "./",
   "./index.html",
@@ -9,6 +9,10 @@ const ASSETS = [
   "./lib/three.module.min.js",
   "./lib/jsm/RoundedBoxGeometry.js",
   "./lib/jsm/RoomEnvironment.js",
+  "./lib/jsm/loaders/GLTFLoader.js",
+  "./lib/jsm/utils/SkeletonUtils.js",
+  "./lib/jsm/utils/BufferGeometryUtils.js",
+  "./assets/models/character.glb",
   "./lib/jsm/postprocessing/EffectComposer.js",
   "./lib/jsm/postprocessing/Pass.js",
   "./lib/jsm/postprocessing/RenderPass.js",

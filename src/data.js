@@ -44,6 +44,10 @@ export const FISH = [
   { id: "koi",       name: "Koi",          kind: "fish", boxSize: 2, boxCost: 120, market: 88,  level: 8, color: 0xf8f9fa, fin: 0xe85d04, size: 1.25, bodyH: 0.44, pattern: "patches", pattern2: 0xe85d04, shape: "long", tail: "fan" },
   { id: "seahorse",  name: "Seahorse",     kind: "fish", boxSize: 2, boxCost: 140, market: 100, level: 8, color: 0xffd166, fin: 0xfca311, size: 1.05, bodyH: 0.40, pattern: "spots",   pattern2: 0xfca311, shape: "normal", tail: "seahorse" },
   { id: "arowana",   name: "Arowana",      kind: "fish", boxSize: 1, boxCost: 260, market: 190, level: 9, color: 0xc7ccd1, fin: 0x9aa3ab, size: 1.5,  bodyH: 0.36, pattern: "scale",   pattern2: 0x8d99ae, shape: "long", tail: "fan" },
+  { id: "yellowtang",name: "Yellow Tang",  kind: "fish", boxSize: 2, boxCost: 70,  market: 52,  level: 6, color: 0xffd400, fin: 0xe0b000, size: 1.1,  bodyH: 0.56, pattern: "solid",   pattern2: 0xe0b000, shape: "tall", tail: "round" },
+  { id: "gramma",    name: "Royal Gramma", kind: "fish", boxSize: 4, boxCost: 48,  market: 36,  level: 5, color: 0x9b5de5, fin: 0xffd400, size: 0.8,  bodyH: 0.44, pattern: "gradient",pattern2: 0xffd400, shape: "normal", tail: "fan" },
+  { id: "foxface",   name: "Foxface",      kind: "fish", boxSize: 2, boxCost: 90,  market: 66,  level: 7, color: 0xffe08a, fin: 0x2b2d42, size: 1.2,  bodyH: 0.58, pattern: "solid",   pattern2: 0x2b2d42, shape: "tall", tail: "round" },
+  { id: "chromis",   name: "Green Chromis",kind: "fish", boxSize: 4, boxCost: 22,  market: 16,  level: 3, color: 0x83c5be, fin: 0x2a9d8f, size: 0.72, bodyH: 0.42, pattern: "solid",   pattern2: 0x2a9d8f, school: true, shape: "tetra", tail: "fork" },
 ];
 
 // shape: how it renders on shelves — "box" | "cyl" | "bag" | "bottle" | "tube" | "bar" | "wood"
@@ -69,6 +73,16 @@ export const PRODUCTS = [
   { id: "shipwreck",name: "Shipwreck Decor",kind:"product",boxSize: 4, boxCost: 70,  market: 27, level: 6, color: 0x5b4636, shape: "wood" },
   { id: "kit",     name: "Starter Kit",   kind: "product", boxSize: 4, boxCost: 110, market: 40, level: 7, color: 0xffb703, shape: "box" },
   { id: "bg",      name: "Tank Backdrop", kind: "product", boxSize: 6, boxCost: 24,  market: 9,  level: 8, color: 0x118ab2, shape: "bar" },
+  { id: "frozen",  name: "Frozen Food",   kind: "product", boxSize: 6, boxCost: 16,  market: 7,  level: 2, color: 0x48cae4, shape: "box" },
+  { id: "saltmix", name: "Salt Mix",      kind: "product", boxSize: 4, boxCost: 30,  market: 12, level: 3, color: 0xe6e8e6, shape: "bag" },
+  { id: "powerhead",name: "Powerhead",    kind: "product", boxSize: 6, boxCost: 40,  market: 16, level: 4, color: 0x3a86ff, shape: "box" },
+  { id: "calcium", name: "Calcium",       kind: "product", boxSize: 6, boxCost: 22,  market: 9,  level: 4, color: 0xf1faee, shape: "bottle" },
+  { id: "alk",     name: "Alkalinity",    kind: "product", boxSize: 6, boxCost: 22,  market: 9,  level: 4, color: 0xa8dadc, shape: "bottle" },
+  { id: "wavemaker",name: "Wave Maker",   kind: "product", boxSize: 6, boxCost: 56,  market: 21, level: 5, color: 0x4361ee, shape: "box" },
+  { id: "salinity",name: "Salinity Probe",kind: "product", boxSize: 6, boxCost: 28,  market: 11, level: 5, color: 0x457b9d, shape: "tube" },
+  { id: "skimmer", name: "Protein Skimmer",kind:"product",boxSize: 4, boxCost: 70,  market: 27, level: 6, color: 0x415a77, shape: "box" },
+  { id: "uv",      name: "UV Sterilizer", kind: "product", boxSize: 4, boxCost: 60,  market: 23, level: 6, color: 0x9d4edd, shape: "tube" },
+  { id: "reefled", name: "Reef LED",      kind: "product", boxSize: 4, boxCost: 92,  market: 35, level: 7, color: 0x7b2ff7, shape: "bar" },
 ];
 
 // Coral frags — sold from frag racks (kind: "coral").
@@ -85,6 +99,14 @@ export const CORAL = [
   { id: "goni",    name: "Goniopora",   kind: "coral", boxSize: 2, boxCost: 90,  market: 68,  level: 5, color: 0xff00a0, form: "polyps" },
   { id: "chalice", name: "Chalice",     kind: "coral", boxSize: 2, boxCost: 110, market: 82,  level: 6, color: 0xffa62b, form: "plate" },
   { id: "scoly",   name: "Scolymia",    kind: "coral", boxSize: 1, boxCost: 160, market: 120, level: 7, color: 0xff1f6b, form: "brain" },
+  { id: "gsp",     name: "Green Star Polyps", kind: "coral", boxSize: 4, boxCost: 22, market: 16, level: 1, color: 0x39ff6a, form: "polyps" },
+  { id: "leather", name: "Leather Coral", kind: "coral", boxSize: 4, boxCost: 30, market: 23, level: 2, color: 0xc99a5b, form: "mush" },
+  { id: "kenya",   name: "Kenya Tree",  kind: "coral", boxSize: 4, boxCost: 32,  market: 24,  level: 2, color: 0xb08968, form: "branch" },
+  { id: "candycane",name:"Candy Cane",  kind: "coral", boxSize: 4, boxCost: 44,  market: 33,  level: 3, color: 0x6ad1ff, form: "polyps" },
+  { id: "xenia",   name: "Pulsing Xenia",kind:"coral", boxSize: 4, boxCost: 38,  market: 28,  level: 3, color: 0xc9b6e4, form: "polyps" },
+  { id: "frogspawn",name: "Frogspawn",  kind: "coral", boxSize: 2, boxCost: 65,  market: 49,  level: 4, color: 0x9bf6a0, form: "branch" },
+  { id: "trachy",  name: "Trachyphyllia",kind:"coral", boxSize: 2, boxCost: 75,  market: 56,  level: 5, color: 0xff5da2, form: "brain" },
+  { id: "birdsnest",name: "Birdsnest",  kind: "coral", boxSize: 2, boxCost: 70,  market: 52,  level: 6, color: 0xff7eb6, form: "branch" },
 ];
 
 export const CATALOG = [...FISH, ...PRODUCTS, ...CORAL];
