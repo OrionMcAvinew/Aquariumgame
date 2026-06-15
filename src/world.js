@@ -1682,11 +1682,15 @@ function makeBasket() {
 // Real rigged model with walk/idle animation (used for shoppers).
 function buildModelCustomer() {
   const inner = cloneSkeleton(CHAR_GLTF.scene);
-  const box = new THREE.Box3().setFromObject(inner);
-  const h = Math.max(0.001, box.max.y - box.min.y);
+  inner.updateMatrixWorld(true);
+  let box = new THREE.Box3().setFromObject(inner);
+  let h = box.max.y - box.min.y;
+  if (!(h > 0.3 && h < 5)) h = 1.32; // skinned-mesh box can misreport; fall back
   const s = 1.72 / h;
   inner.scale.setScalar(s);
-  inner.position.y = -box.min.y * s;
+  inner.updateMatrixWorld(true);
+  box = new THREE.Box3().setFromObject(inner);
+  inner.position.y = -box.min.y; // feet on the floor
   inner.rotation.y = Math.PI; // orient "front" to +z to match the game convention
   const g = new THREE.Group();
   g.add(inner);
