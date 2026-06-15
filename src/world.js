@@ -1682,12 +1682,45 @@ function makeBasket() {
 // Real rigged model with walk/idle animation (used for shoppers).
 function buildModelCustomer() {
   const inner = cloneSkeleton(CHAR_GLTF.scene);
-  const box = new THREE.Box3().setFromObject(inner);
-  const h = Math.max(0.001, box.max.y - box.min.y);
+  inner.updateMatrixWorld(true);
+  let box = new THREE.Box3().setFromObject(inner);
+  let h = box.max.y - box.min.y;
+  if (!(h > 0.3 && h < 5)) h = 1.32; // skinned-mesh box can misreport; fall back
   const s = 1.72 / h;
   inner.scale.setScalar(s);
-  inner.position.y = -box.min.y * s;
+  inner.updateMatrixWorld(true);
+  box = new THREE.Box3().setFromObject(inner);
+  inner.position.y = -box.min.y; // feet on the floor
   inner.rotation.y = Math.PI; // orient "front" to +z to match the game convention
+
+  // give each shopper a unique look: clone the shared materials, then recolor
+  // by material name (Skin / Hair / Shirt / Pants / Shoes ...).
+  const pick = (arr) => arr[(Math.random() * arr.length) | 0];
+  const look = {
+    skin: pick(SKIN), hair: pick(HAIR), shirt: pick(SHIRT),
+    shirt2: pick(SHIRT), pants: pick(PANTS), shoes: pick([0x2b2d42, 0x1a1a1a, 0x5a3e2b, 0x3d2b1f]),
+  };
+  const matClones = new Map();
+  inner.traverse((o) => {
+    if (!o.isMesh || !o.material) return;
+    const swap = (m) => {
+      let cm = matClones.get(m);
+      if (!cm) {
+        cm = m.clone();
+        const n = (m.name || "").toLowerCase();
+        if (n.includes("skin")) cm.color.setHex(look.skin);
+        else if (n === "hair2") cm.color.setHex(look.hair);
+        else if (n.includes("hair")) cm.color.setHex(look.hair);
+        else if (n === "shirt2") cm.color.setHex(look.shirt2);
+        else if (n.includes("shirt")) cm.color.setHex(look.shirt);
+        else if (n.includes("pant")) cm.color.setHex(look.pants);
+        else if (n.includes("shoe") || n.includes("sock")) cm.color.setHex(look.shoes);
+        matClones.set(m, cm);
+      }
+      return cm;
+    };
+    o.material = Array.isArray(o.material) ? o.material.map(swap) : swap(o.material);
+  });
   const g = new THREE.Group();
   g.add(inner);
 
