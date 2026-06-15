@@ -1416,7 +1416,9 @@ export class TankUnit {
 const PROD_ICON = {
   food: "🍤", net: "🥅", gravel: "🪨", plant: "🌿", decor: "🪸", thermo: "🌡️",
   heater: "🔥", pump: "💨", cond: "💧", light: "💡", testkit: "🧪", filter: "⚙️",
-  wood: "🪵", castle: "🏰", kit: "📦", bg: "🖼️",
+  wood: "🪵", castle: "🏰", kit: "📦", bg: "🖼️", airstone: "🫧", vacuum: "🧹", medicine: "💊",
+  shipwreck: "⚓", frozen: "🧊", saltmix: "🧂", powerhead: "🌀", calcium: "🧴", alk: "🧴",
+  wavemaker: "🌊", salinity: "🌡️", skimmer: "🌀", uv: "🔆", reefled: "💡",
 };
 const prodIcon = (p) => PROD_ICON[p.id] || (p.kind === "coral" ? "🪸" : "🐠");
 
