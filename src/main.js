@@ -5,7 +5,7 @@ import {
   PALLET, REGISTER_ZONE, SHELF_ROWS, TANK_FISH_CAP, ROW_CAP, ACHIEVEMENTS, STAFF,
   FRAG_CAP,
 } from "./data.js";
-import { buildRoom, TankUnit, ShelfUnit, createBoxMesh, loadFishAssets, loadCharacterModel, loadOfficeProps, placeOfficeProps, Checkout, createCustomerMesh, FeatureTank, FragRack } from "./world.js";
+import { buildRoom, TankUnit, ShelfUnit, createBoxMesh, loadFishAssets, loadCharacterModel, Checkout, createCustomerMesh, FeatureTank, FragRack } from "./world.js";
 import { RoomEnvironment } from "../lib/jsm/RoomEnvironment.js";
 import { EffectComposer } from "../lib/jsm/postprocessing/EffectComposer.js";
 import { RenderPass } from "../lib/jsm/postprocessing/RenderPass.js";
@@ -387,7 +387,6 @@ function init() {
 
   buildRoom(game.scene, game.colliders);
   game.featureTank = new FeatureTank(game.scene, game.colliders, 6.4, 3.0);
-  placeOfficeProps(game.scene, game.colliders); // back-office corner set piece
 
   game.sound = new Sound();
   game.ui = new UI(game);
@@ -493,4 +492,4 @@ function loop(now) {
 
 // Load the fish sprite pack first; init() falls back to procedural art if
 // any asset fails to load, so we run it regardless of the outcome.
-Promise.all([loadFishAssets(), loadCharacterModel(), loadOfficeProps()]).then(init, init);
+Promise.all([loadFishAssets(), loadCharacterModel()]).then(init, init);
