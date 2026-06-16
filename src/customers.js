@@ -244,7 +244,9 @@ class Customer {
     if (this.state === "queue" || this.state === "atCounter") {
       if (this.state === "queue" && this.queueIndex === 0) {
         this.state = "atCounter";
-        this.mesh.rotation.y = Math.PI; // face the counter/player
+        // face the counter/cashier (+z). Model forward is +z -> rot 0;
+        // the procedural figure faced -z, so it used PI.
+        this.mesh.rotation.y = this.mixer ? 0 : Math.PI;
       }
       this.patience -= dt;
       if (this.patience <= 0) this.abandon();

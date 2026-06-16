@@ -1691,7 +1691,8 @@ function buildModelCustomer() {
   inner.updateMatrixWorld(true);
   box = new THREE.Box3().setFromObject(inner);
   inner.position.y = -box.min.y; // feet on the floor
-  inner.rotation.y = Math.PI; // orient "front" to +z to match the game convention
+  // model's native forward is +z, matching the game's facing convention
+  // (group rotation.y = atan2(dx,dz) points local +z along the travel dir)
 
   // give each shopper a unique look: clone the shared materials, then recolor
   // by material name (Skin / Hair / Shirt / Pants / Shoes ...).
