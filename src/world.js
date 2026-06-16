@@ -1668,6 +1668,31 @@ export function loadCharacterModel(url = "assets/models/character.glb") {
   });
 }
 
+// office props set piece (single combined glTF scene) used as a back-office corner
+let OFFICE_GLTF = null;
+export function loadOfficeProps(url = "assets/models/office.glb") {
+  return new Promise((res) => {
+    new GLTFLoader().load(url, (g) => {
+      g.scene.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+      OFFICE_GLTF = g.scene;
+      res();
+    }, undefined, () => res());
+  });
+}
+export function placeOfficeProps(scene, colliders, x = 6.6, z = -5.0, scale = 0.4) {
+  if (!OFFICE_GLTF) return;
+  const s = OFFICE_GLTF;
+  s.scale.setScalar(scale);
+  s.rotation.y = Math.PI; // face into the store
+  s.updateMatrixWorld(true);
+  let box = new THREE.Box3().setFromObject(s);
+  s.position.set(x, -box.min.y, z); // feet on the floor
+  scene.add(s);
+  s.updateMatrixWorld(true);
+  box = new THREE.Box3().setFromObject(s);
+  colliders.push({ minX: box.min.x - 0.1, maxX: box.max.x + 0.1, minZ: box.min.z - 0.1, maxZ: box.max.z + 0.1 });
+}
+
 function makeBasket() {
   const basket = new THREE.Group();
   const tub = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.16, 0.2),

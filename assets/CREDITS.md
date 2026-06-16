@@ -18,3 +18,8 @@ shading preserved).
 - License: Creative Commons Zero (CC0 1.0) — public domain.
 
 Used for shopper NPCs (cloned per customer with its own animation mixer).
+
+## Office props — "60s Office Props"
+- File: `models/office.glb`
+- Source: user-provided glTF (Sketchfab). Used as a static back-office set piece.
+- Confirm the original author's license permits redistribution before publishing publicly.
