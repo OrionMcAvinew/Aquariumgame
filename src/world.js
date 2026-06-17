@@ -830,7 +830,8 @@ function buildFishMesh(sp, scale = 1) {
 
   // Kenney sprites are a whole fish in a 64x64 frame; procedural fish are
   // tightly cropped, so they use a smaller plane.
-  const W = (sprite ? 0.56 : seahorse ? 0.26 : 0.52) * s;
+  // ~quarter of the old size so fish fit the tank and don't clip the glass when turning
+  const W = (sprite ? 0.18 : seahorse ? 0.1 : 0.16) * s;
   const H = W * tex.userData.aspect;
 
   const pA = new THREE.Mesh(new THREE.PlaneGeometry(W, H), bodyMat);
@@ -1338,8 +1339,8 @@ export class TankUnit {
   randomSwimPoint() {
     return new THREE.Vector3(
       (Math.random() - 0.5) * (TANK_W - 0.5),
-      0.2 + Math.random() * (TANK_H - 0.36),
-      (Math.random() - 0.5) * (TANK_D - 0.16)
+      0.22 + Math.random() * (TANK_H - 0.42),
+      (Math.random() - 0.5) * (TANK_D - 0.34) // keep clear of the front/back glass
     );
   }
 
@@ -1352,7 +1353,7 @@ export class TankUnit {
   schoolTargetFor(sid) {
     this.ensureAnchor(sid);
     return this.schoolAnchors[sid].pos.clone().add(new THREE.Vector3(
-      (Math.random() - 0.5) * 0.35, (Math.random() - 0.5) * 0.22, (Math.random() - 0.5) * 0.18));
+      (Math.random() - 0.5) * 0.3, (Math.random() - 0.5) * 0.16, (Math.random() - 0.5) * 0.08));
   }
 
   setCare(care) {
