@@ -213,7 +213,7 @@ export const shelfBrowseSpot = (s) => {
   return { x: s.x - 1.4, z: s.z };
 };
 
-export const COUNTER = { x: 3.3, z: 5.0, w: 2.6, d: 0.9, h: 1.02 };
+export const COUNTER = { x: 3.3, z: 5.0, w: 2.5, d: 1.05, h: 1.0 };
 export const REGISTER_ZONE = { x: 3.3, z: 6.1, r: 1.5 };  // player stands here to serve
 export const QUEUE_SPOTS = [
   { x: 3.3, z: 3.9 }, { x: 3.3, z: 2.9 }, { x: 3.3, z: 1.9 },

@@ -403,7 +403,11 @@ export function buildRoom(scene, colliders) {
     c.updateMatrixWorld(true);
     let box = new THREE.Box3().setFromObject(c);
     const sz = new THREE.Vector3(); box.getSize(sz);
-    c.scale.setScalar(COUNTER.h / sz.y); // match the counter working height
+    // Fit the model to the counter footprint (per-axis): the raw export is a
+    // low, very deep reception desk (~2 m deep), which would block the staff
+    // walk-in behind the counter. Squashing it to COUNTER's width/depth/height
+    // keeps a navigable serving area and matches the collider exactly.
+    c.scale.set(COUNTER.w / sz.x, COUNTER.h / sz.y, COUNTER.d / sz.z);
     c.rotation.y = Math.PI;               // face the player side (+z)
     c.updateMatrixWorld(true);
     box = new THREE.Box3().setFromObject(c);

@@ -93,15 +93,16 @@ body.touch #touch-area { pointer-events: auto; }
 #crosshair {
   position: fixed;
   left: 50%; top: 50%;
-  width: 6px; height: 6px;
-  margin: -3px 0 0 -3px;
+  width: 14px; height: 14px;
+  margin: -7px 0 0 -7px;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.85);
-  box-shadow: 0 0 4px rgba(0, 0, 0, 0.6);
+  background: transparent;
+  border: 2px solid rgba(255, 255, 255, 0.85);
+  box-shadow: 0 0 3px rgba(0, 0, 0, 0.7), inset 0 0 3px rgba(0, 0, 0, 0.5);
   z-index: 15;
   pointer-events: none;
 }
-body.touch #crosshair { width: 8px; height: 8px; }
+body.touch #crosshair { width: 16px; height: 16px; margin: -8px 0 0 -8px; }
 
 #prompt {
   position: fixed;
