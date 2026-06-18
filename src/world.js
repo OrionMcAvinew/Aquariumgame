@@ -1321,9 +1321,11 @@ export class TankUnit {
       this.group.remove(f.mesh);
     }
     while (this.fishMeshes.length < fishList.length) {
-      const sid = fishList[this.fishMeshes.length];
+      const f = fishList[this.fishMeshes.length];
+      const sid = (f && f.id) ? f.id : f; // tolerate legacy plain ids
       const species = item(sid);
       const { group, tail } = buildFishMesh(species);
+      if (f && f.rare) group.scale.multiplyScalar(1.25); // rare morphs are a bit bigger
       group.position.copy(this.randomSwimPoint());
       if (species.school) this.ensureAnchor(sid);
       this.fishMeshes.push({

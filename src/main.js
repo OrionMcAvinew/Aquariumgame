@@ -3,7 +3,7 @@ import * as THREE from "three";
 import {
   CATALOG, item, DAY_LEN, CARE_DECAY_PER_DAY, xpForLevel, MAX_LEVEL,
   PALLET, REGISTER_ZONE, SHELF_ROWS, TANK_FISH_CAP, ROW_CAP, ACHIEVEMENTS, STAFF,
-  FRAG_CAP, CORAL_GROWTH_RATE, CORAL_RARE_CHANCE,
+  FRAG_CAP, CORAL_GROWTH_RATE, CORAL_RARE_CHANCE, rollFishQuality,
 } from "./data.js";
 import { buildRoom, TankUnit, ShelfUnit, createBoxMesh, loadFishAssets, loadCharacterModel, Checkout, createCustomerMesh, FeatureTank, FragRack } from "./world.js";
 import { RoomEnvironment } from "../lib/jsm/RoomEnvironment.js";
@@ -38,7 +38,7 @@ function defaultState() {
     cash: 300, day: 1, time: 0, level: 1, xp: 0, goal: goalFor(1, 1),
     tanksOwned: 2, shelvesOwned: 1, fragRacksOwned: 1,
     tanks: [
-      { fish: ["guppy", "guppy", "guppy", "guppy"], care: 100 },
+      { fish: ["guppy", "guppy", "guppy", "guppy"].map((id) => ({ id, q: 2, rare: false })), care: 100 },
       { fish: [], care: 100 },
     ],
     shelves: [{ rows: emptyRows() }],
@@ -82,6 +82,12 @@ function loadState() {
     // saves from older catalogs may be missing prices for new items
     s.prices = { ...defaultPrices, ...d.prices };
     s.stats = { ...freshStats(), ...d.stats };
+    // fish are individuals now; migrate legacy plain-id saves
+    s.tanks = (d.tanks || s.tanks).map((t) => ({
+      care: t.care ?? 100,
+      fish: (t.fish || []).map((f) => typeof f === "string"
+        ? { id: f, q: 2, rare: false } : { id: f.id, q: f.q ?? 2, rare: !!f.rare }),
+    }));
     s.boxes = (d.boxes || []).map((b) => ({ itemId: b.itemId, count: b.count, x: b.x, z: b.z }));
     s.goal = goalFor(s.level, s.day); // keep the target in step with progress
     s.lifetime = { sold: 0, served: 0, revenue: 0, goals: 0, ...d.lifetime };
@@ -229,7 +235,7 @@ game.autoStock = () => {
     const ti = s.tanks.findIndex((t) => t.fish.length < TANK_FISH_CAP);
     if (ti === -1) return;
     const n = Math.min(box.count, TANK_FISH_CAP - s.tanks[ti].fish.length);
-    for (let i = 0; i < n; i++) s.tanks[ti].fish.push(box.itemId);
+    for (let i = 0; i < n; i++) { const { q, rare } = rollFishQuality(); s.tanks[ti].fish.push({ id: box.itemId, q, rare }); }
     box.count -= n;
     game.tankUnits[ti].syncFish(s.tanks[ti].fish);
   } else if (it.kind === "coral") {

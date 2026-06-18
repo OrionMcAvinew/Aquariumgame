@@ -1,7 +1,7 @@
 // First-person controls: keyboard/mouse on desktop, twin-zone touch on mobile.
 // Also owns the interaction raycast and the carried-box logic.
 import * as THREE from "three";
-import { item, TANK_FISH_CAP, ROW_CAP, FRAG_CAP } from "./data.js";
+import { item, TANK_FISH_CAP, ROW_CAP, FRAG_CAP, rollFishQuality } from "./data.js";
 
 const EYE = 1.65;
 const RADIUS = 0.34;
@@ -260,7 +260,7 @@ export class Player {
     } else if (t.type === "stock-tank") {
       const tank = g.state.tanks[t.tankIdx];
       const n = Math.min(this.carry.count, TANK_FISH_CAP - tank.fish.length);
-      for (let i = 0; i < n; i++) tank.fish.push(this.carry.itemId);
+      for (let i = 0; i < n; i++) { const { q, rare } = rollFishQuality(); tank.fish.push({ id: this.carry.itemId, q, rare }); }
       this.carry.count -= n;
       t.unit.syncFish(tank.fish);
       g.sound.splash();
