@@ -115,6 +115,11 @@ const byId = new Map(CATALOG.map((c) => [c.id, c]));
 export const FRAG_CAP = 18;                 // frags per rack (3 tiers x 6)
 export const fragRackPrice = (owned) => Math.round(220 * Math.pow(1.5, owned));
 export const MAX_FRAGRACK_SLOTS = 3;
+// Coral farming: frags grow 0 -> 1 (mature colony) and gain value as they grow.
+export const CORAL_GROWTH_RATE = 1 / 240; // growth per second (~4 min to mature)
+export const CORAL_RARE_CHANCE = 0.05;    // chance a maturing frag becomes a rare morph
+export const coralValue = (it, growth = 1, rare = false) =>
+  Math.round(it.market * (0.5 + growth) * (rare ? 2.2 : 1));
 export const FRAGRACK_SLOTS = [
   { x: -1.7, z: -5.0, rotY: 0 },
   { x: 1.7,  z: -5.0, rotY: 0 },

@@ -212,7 +212,12 @@ export class Player {
             ? { type: "stock-frag", unit: info.unit, rackIdx: ownedIdx, label: `Place ${item(this.carry.itemId).name} ×${Math.min(FRAG_CAP - rk.frags.length, this.carry.count)}` }
             : { type: "none", label: "Frag rack is full" };
         } else if (!this.carry) {
-          found = { type: "none", label: `Frag rack · ${rk.frags.length}/${FRAG_CAP} frags` };
+          const mature = rk.frags.find((f) => (f.growth ?? 1) >= 0.95);
+          if (mature && rk.frags.length < FRAG_CAP) {
+            found = { type: "frag-coral", rackIdx: ownedIdx, label: `Frag mature ${item(mature.id).name}` };
+          } else {
+            found = { type: "none", label: `Frag rack · ${rk.frags.length}/${FRAG_CAP} frags` };
+          }
         }
       } else if (info.type === "scanItem") {
         if (!info.entry.scanned) {
@@ -288,13 +293,15 @@ export class Player {
     } else if (t.type === "stock-frag") {
       const rk = g.state.fragRacks[t.rackIdx];
       const n = Math.min(this.carry.count, FRAG_CAP - rk.frags.length);
-      for (let i = 0; i < n; i++) rk.frags.push(this.carry.itemId);
+      for (let i = 0; i < n; i++) rk.frags.push({ id: this.carry.itemId, growth: 0, rare: false });
       this.carry.count -= n;
       t.unit.syncFrags(rk.frags);
       g.sound.splash();
       g.ui.toast(`🪸 ${n} ${item(this.carry.itemId).name} placed in the frag rack`);
       if (this.carry.count <= 0) this.discardCarried();
       g.save();
+    } else if (t.type === "frag-coral") {
+      g.fragCoral(t.rackIdx);
     } else if (t.type === "scanItem") {
       t.checkout.scan(t.entry);
       g.ui.updateCheckout();
