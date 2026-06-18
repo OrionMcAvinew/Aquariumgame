@@ -3,6 +3,7 @@ import {
   item, CATALOG, MAX_CUSTOMERS, QUEUE_PATIENCE, CARE_SELL_MIN,
   TANK_SLOTS, SHELF_SLOTS, FRAGRACK_SLOTS, tankBrowseSpot, shelfBrowseSpot, fragBrowseSpot,
   QUEUE_SPOTS, DOOR_IN, SPAWN, AISLE_X, ROW_CAP, TANK_FISH_CAP, FRAG_CAP, coralValue,
+  fishValue, fishLabel,
 } from "./data.js";
 import { createCustomerMesh } from "./world.js";
 
@@ -59,7 +60,7 @@ class Customer {
       let spot = null;
       if (it.kind === "fish") {
         const ti = g.state.tanks.findIndex(
-          (t) => t.care >= CARE_SELL_MIN && t.fish.includes(id)
+          (t) => t.care >= CARE_SELL_MIN && t.fish.some((f) => (f.id ?? f) === id)
         );
         if (ti !== -1) {
           spot = tankBrowseSpot(TANK_SLOTS[ti]);
@@ -105,11 +106,21 @@ class Customer {
 
     if (t.kind === "fish") {
       const tank = g.state.tanks[t.tankIdx];
-      const i = tank.fish.indexOf(t.id);
-      if (i !== -1 && tank.care >= CARE_SELL_MIN) {
-        tank.fish.splice(i, 1);
+      // pick the best individual (rare first, then highest quality)
+      let bi = -1;
+      tank.fish.forEach((f, k) => {
+        if ((f.id ?? f) !== t.id) return;
+        if (bi === -1) { bi = k; return; }
+        const a = tank.fish[bi];
+        const ra = (a.rare ? 1 : 0), rf = (f.rare ? 1 : 0);
+        if (rf > ra || (rf === ra && (f.q ?? 2) > (a.q ?? 2))) bi = k;
+      });
+      if (bi !== -1 && tank.care >= CARE_SELL_MIN) {
+        const f = tank.fish[bi];
+        tank.fish.splice(bi, 1);
         g.tankUnits[t.tankIdx].syncFish(tank.fish);
-        this.cart.push({ id: t.id, label: item(t.id).name, price, scanned: false });
+        const it = item(t.id), q = f.q ?? 2, rare = !!f.rare;
+        this.cart.push({ id: t.id, label: fishLabel(it, q, rare), price: fishValue(it, q, rare), scanned: false, q, rare });
       }
     } else if (t.kind === "coral") {
       const rk = g.state.fragRacks[t.rackIdx];
@@ -169,7 +180,7 @@ class Customer {
       const it = item(c.id);
       if (it.kind === "fish") {
         const ti = g.state.tanks.findIndex((t) => t.fish.length < TANK_FISH_CAP);
-        if (ti !== -1) { g.state.tanks[ti].fish.push(c.id); g.tankUnits[ti].syncFish(g.state.tanks[ti].fish); }
+        if (ti !== -1) { g.state.tanks[ti].fish.push({ id: c.id, q: c.q ?? 2, rare: !!c.rare }); g.tankUnits[ti].syncFish(g.state.tanks[ti].fish); }
       } else if (it.kind === "coral") {
         const ri = g.state.fragRacks.findIndex((rk) => rk.frags.length < FRAG_CAP);
         if (ri !== -1) {
@@ -281,7 +292,7 @@ export class CustomerManager {
     const unlocked = CATALOG.filter((c) => c.level <= g.state.level);
     const stocked = unlocked.filter((c) =>
       c.kind === "fish"
-        ? g.state.tanks.some((t) => t.fish.includes(c.id) && t.care >= CARE_SELL_MIN)
+        ? g.state.tanks.some((t) => t.care >= CARE_SELL_MIN && t.fish.some((f) => (f.id ?? f) === c.id))
         : c.kind === "coral"
           ? g.state.fragRacks.some((rk) => rk.frags.some((f) => (f.id ?? f) === c.id))
           : g.state.shelves.some((s) => s.rows.some((r) => r.product === c.id && r.count > 0))

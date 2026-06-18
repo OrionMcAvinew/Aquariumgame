@@ -112,6 +112,26 @@ export const CORAL = [
 export const CATALOG = [...FISH, ...PRODUCTS, ...CORAL];
 const byId = new Map(CATALOG.map((c) => [c.id, c]));
 
+// Fish are individuals with a quality grade (1-5) and a small chance of a rare
+// morph — so they sell for more and feel collectible.
+export const QUALITY_WORDS = ["Standard", "Good", "Quality", "Premium", "Show-Grade"];
+const RARE_FISH = {
+  clownfish: "Platinum Clownfish", guppy: "Golden Guppy", betta: "Galaxy Betta",
+  discus: "Albino Discus", angelfish: "Platinum Angelfish", koi: "Kohaku Koi",
+  oscar: "Albino Oscar", goldfish: "Calico Goldfish", bluetang: "Powder Blue Tang",
+  mandarin: "Spotted Mandarin", molly: "Snowflake Molly", betta2: "",
+};
+export const rareFishName = (it) => RARE_FISH[it.id] || ("Rare " + it.name);
+export const fishValue = (it, q = 2, rare = false) =>
+  Math.round(it.market * (0.7 + q * 0.12) * (rare ? 3 : 1));
+export const fishLabel = (it, q = 2, rare = false) =>
+  (rare ? "🌟 " : "") + (rare ? rareFishName(it) : `${QUALITY_WORDS[q - 1]} ${it.name}`);
+export const rollFishQuality = () => {
+  const r = Math.random();
+  const q = r < 0.25 ? 1 : r < 0.72 ? 2 : r < 0.9 ? 3 : r < 0.98 ? 4 : 5;
+  return { q, rare: Math.random() < 0.03 };
+};
+
 export const FRAG_CAP = 18;                 // frags per rack (3 tiers x 6)
 export const fragRackPrice = (owned) => Math.round(220 * Math.pow(1.5, owned));
 export const MAX_FRAGRACK_SLOTS = 3;
