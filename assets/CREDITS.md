@@ -18,3 +18,11 @@ shading preserved).
 - License: Creative Commons Zero (CC0 1.0) — public domain.
 
 Used for shopper NPCs (cloned per customer with its own animation mixer).
+
+## Checkout counter — Meshy AI
+- File: `models/counter.glb`
+- Generated with Meshy AI (https://www.meshy.ai) by the project owner.
+
+Vertex normals are computed at load time and a clean white PBR material is
+applied so it reads as a modern retail checkout. A textured export can be
+dropped in later in place of this geometry-only mesh.

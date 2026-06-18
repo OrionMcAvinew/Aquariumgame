@@ -11,6 +11,7 @@ import {
 // PBR material so surfaces pick up the room environment (reflections, softer
 // shading) instead of looking flat. Small decor/coral keep cheaper materials.
 const mat = (color, opts = {}) => new THREE.MeshStandardMaterial({ color, roughness: 0.85, metalness: 0.0, ...opts });
+let COUNTER_GLTF = null; // optional checkout-counter model (replaces the procedural one)
 // rounded-edge box to soften the blocky furniture
 const rbox = (w, h, d, r = 0.05) =>
   new RoundedBoxGeometry(w, h, d, 3, Math.max(0.008, Math.min(r, Math.min(w, h, d) / 2 - 0.004)));
@@ -381,27 +382,51 @@ export function buildRoom(scene, colliders) {
     { minX: -halfW, maxX: halfW, minZ: halfD - 0.2, maxZ: halfD + 1 },
   );
 
-  // Checkout counter + register
-  const counterGroup = new THREE.Group();
-  const top = new THREE.Mesh(rbox(COUNTER.w, 0.08, COUNTER.d, 0.035), mat(0x8a5a3b, { roughness: 0.6 }));
-  top.position.y = COUNTER.h;
-  const body = new THREE.Mesh(rbox(COUNTER.w - 0.1, COUNTER.h, COUNTER.d - 0.15, 0.05), mat(NAVY, { roughness: 0.55 }));
-  body.position.y = COUNTER.h / 2;
-  const register = new THREE.Mesh(rbox(0.42, 0.3, 0.36, 0.05), mat(0x2b2d42, { roughness: 0.5 }));
-  register.position.set(-COUNTER.w / 2 + 0.45, COUNTER.h + 0.19, 0);
-  const screen = new THREE.Mesh(new THREE.PlaneGeometry(0.3, 0.18),
-    new THREE.MeshBasicMaterial({ color: 0x9ef0ff }));
-  screen.position.set(-COUNTER.w / 2 + 0.45, COUNTER.h + 0.22, 0.19);
-  const cardReader = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.16, 0.1), mat(0x495057));
-  cardReader.position.set(0.2, COUNTER.h + 0.12, 0.25);
-  cardReader.rotation.x = -0.4;
-  const bagStand = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.4, 0.25), mat(0xd5bdaf));
-  bagStand.position.set(COUNTER.w / 2 - 0.35, COUNTER.h + 0.24, 0);
-  counterGroup.add(top, body, register, screen, cardReader, bagStand);
-  counterGroup.position.set(COUNTER.x, 0, COUNTER.z);
-  counterGroup.traverse((m) => { m.castShadow = true; });
-  scene.add(counterGroup);
-  addContactShadow(counterGroup, COUNTER.w + 0.5, COUNTER.d + 0.6);
+  // Checkout counter — use the loaded model if present, else the procedural one.
+  // (The functional register screen + bag are added separately by the Checkout class.)
+  if (COUNTER_GLTF) {
+    const c = COUNTER_GLTF;
+    c.traverse((o) => {
+      if (o.isMesh) {
+        o.castShadow = true;
+        // The raw Meshy export ships geometry only; without normals a lit
+        // material renders pure black, so synthesize them when missing.
+        if (o.geometry && !o.geometry.attributes.normal) o.geometry.computeVertexNormals();
+        o.material = new THREE.MeshStandardMaterial({ color: 0xeef1f4, roughness: 0.5, metalness: 0.05, envMapIntensity: 0.8 });
+      }
+    });
+    c.updateMatrixWorld(true);
+    let box = new THREE.Box3().setFromObject(c);
+    const sz = new THREE.Vector3(); box.getSize(sz);
+    c.scale.setScalar(COUNTER.h / sz.y); // match the counter working height
+    c.rotation.y = Math.PI;               // face the player side (+z)
+    c.updateMatrixWorld(true);
+    box = new THREE.Box3().setFromObject(c);
+    c.position.set(COUNTER.x, -box.min.y, COUNTER.z);
+    scene.add(c);
+    addContactShadow(c, COUNTER.w + 0.6, COUNTER.d + 0.8);
+  } else {
+    const counterGroup = new THREE.Group();
+    const top = new THREE.Mesh(rbox(COUNTER.w, 0.08, COUNTER.d, 0.035), mat(0x8a5a3b, { roughness: 0.6 }));
+    top.position.y = COUNTER.h;
+    const body = new THREE.Mesh(rbox(COUNTER.w - 0.1, COUNTER.h, COUNTER.d - 0.15, 0.05), mat(NAVY, { roughness: 0.55 }));
+    body.position.y = COUNTER.h / 2;
+    const register = new THREE.Mesh(rbox(0.42, 0.3, 0.36, 0.05), mat(0x2b2d42, { roughness: 0.5 }));
+    register.position.set(-COUNTER.w / 2 + 0.45, COUNTER.h + 0.19, 0);
+    const screen = new THREE.Mesh(new THREE.PlaneGeometry(0.3, 0.18),
+      new THREE.MeshBasicMaterial({ color: 0x9ef0ff }));
+    screen.position.set(-COUNTER.w / 2 + 0.45, COUNTER.h + 0.22, 0.19);
+    const cardReader = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.16, 0.1), mat(0x495057));
+    cardReader.position.set(0.2, COUNTER.h + 0.12, 0.25);
+    cardReader.rotation.x = -0.4;
+    const bagStand = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.4, 0.25), mat(0xd5bdaf));
+    bagStand.position.set(COUNTER.w / 2 - 0.35, COUNTER.h + 0.24, 0);
+    counterGroup.add(top, body, register, screen, cardReader, bagStand);
+    counterGroup.position.set(COUNTER.x, 0, COUNTER.z);
+    counterGroup.traverse((m) => { m.castShadow = true; });
+    scene.add(counterGroup);
+    addContactShadow(counterGroup, COUNTER.w + 0.5, COUNTER.d + 0.6);
+  }
   colliders.push({
     minX: COUNTER.x - COUNTER.w / 2, maxX: COUNTER.x + COUNTER.w / 2,
     minZ: COUNTER.z - COUNTER.d / 2, maxZ: COUNTER.z + COUNTER.d / 2,
@@ -1668,6 +1693,13 @@ export function loadCharacterModel(url = "assets/models/character.glb") {
       CHAR_GLTF = { scene: g.scene, animations: g.animations };
       res();
     }, undefined, () => res()); // tolerate failure -> procedural fallback
+  });
+}
+
+// optional checkout-counter model; falls back to the procedural counter if absent
+export function loadCounterModel(url = "assets/models/counter.glb") {
+  return new Promise((res) => {
+    new GLTFLoader().load(url, (g) => { COUNTER_GLTF = g.scene; res(); }, undefined, () => res());
   });
 }
 
