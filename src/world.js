@@ -389,10 +389,15 @@ export function buildRoom(scene, colliders) {
     c.traverse((o) => {
       if (o.isMesh) {
         o.castShadow = true;
-        // The raw Meshy export ships geometry only; without normals a lit
-        // material renders pure black, so synthesize them when missing.
+        // Honor the export's own materials when it ships textures; only the
+        // bare geometry-only export (no maps) needs a fallback PBR material —
+        // and that case also lacks normals, which would otherwise render black.
         if (o.geometry && !o.geometry.attributes.normal) o.geometry.computeVertexNormals();
-        o.material = new THREE.MeshStandardMaterial({ color: 0xeef1f4, roughness: 0.5, metalness: 0.05, envMapIntensity: 0.8 });
+        if (o.material && o.material.map) {
+          o.material.envMapIntensity = 0.9;
+        } else {
+          o.material = new THREE.MeshStandardMaterial({ color: 0xeef1f4, roughness: 0.5, metalness: 0.05, envMapIntensity: 0.8 });
+        }
       }
     });
     c.updateMatrixWorld(true);
