@@ -344,6 +344,7 @@ export class UI {
         <p><b>📈 Levels:</b> every $1 of sales is 1 XP. Leveling up unlocks new species, products, and more customers.</p>
         <p><b>🎯 Daily goal:</b> hit the day's revenue target (shown in the HUD) to earn a cash bonus at closing time.</p>
         <p><b>👥 Staff:</b> in the Store tab you can hire a Cashier (auto-rings up the queue), an Aquarist (auto-cleans tanks), and a Stocker (auto-unpacks deliveries) for a daily wage.</p>
+        <p><b>🪸 Coral farming:</b> frags you stock in a frag rack grow into mature colonies over time (even while you're away) and sell for more. Look at a rack with empty hands to frag a mature colony for extra stock — and watch for rare morphs!</p>
         <p><b>🏆 Achievements:</b> check the trophy tab to track milestones as you grow the shop.</p>
         <p><b>🔊 Sound:</b> toggle the ambient aquarium audio with the speaker button in the HUD.</p>
         <p class="controls-note"><b>Controls:</b> WASD move · mouse look (click to capture) · E interact · TAB tablet · SHIFT run.<br>

@@ -5,7 +5,7 @@ import { GLTFLoader } from "../lib/jsm/loaders/GLTFLoader.js";
 import { clone as cloneSkeleton } from "../lib/jsm/utils/SkeletonUtils.js";
 import {
   STORE, TANK_SLOTS, SHELF_SLOTS, COUNTER, PALLET,
-  SHELF_ROWS, ROW_CAP, item, FISH, FRAGRACK_SLOTS, TANK_COLS, TANK_ROW_Y,
+  SHELF_ROWS, ROW_CAP, item, FISH, FRAGRACK_SLOTS, TANK_COLS, TANK_ROW_Y, coralValue,
 } from "./data.js";
 
 // PBR material so surfaces pick up the room environment (reflections, softer
@@ -2167,30 +2167,50 @@ export class FragRack {
   }
 
   // frags: flat list of coral ids (mixed), laid out 6 per tier on the grid
+  // frags: array of { id, growth, rare } (legacy plain ids also tolerated)
   syncFrags(frags) {
     for (const m of this.fragMeshes) this.group.remove(m);
     this.fragMeshes = [];
+    this.fragEntries = [];
     const perTier = 6, cols = 3;
     const r = seededRand(this.slotIndex + 5);
-    frags.forEach((cid, i) => {
+    frags.forEach((f, i) => {
+      const cid = typeof f === "string" ? f : f.id;
       const tier = Math.floor(i / perTier);
       if (tier > 2 || !item(cid)) return;
       const idx = i % perTier, col = idx % cols, row = Math.floor(idx / cols);
       const coral = item(cid);
       const fx = -0.6 + col * 0.6 + (r() - 0.5) * 0.06, fz = -0.15 + row * 0.3;
       const frag = buildFragMesh(coral);
-      frag.scale.setScalar(1.5);
       frag.position.set(fx, this.tierY[tier] + 0.03, fz);
       frag.rotation.y = r() * 6.28;
       this.group.add(frag);
       this.fragMeshes.push(frag);
-      // little price tag clipped to the grid in front of the frag
       const tag = new THREE.Mesh(new THREE.PlaneGeometry(0.11, 0.062),
         new THREE.MeshBasicMaterial({ map: fragTagTexture(coral.market, coral.color), transparent: true }));
       tag.position.set(fx, this.tierY[tier] + 0.05, fz + 0.16);
       tag.rotation.x = -0.9;
       this.group.add(tag);
       this.fragMeshes.push(tag);
+      this.fragEntries.push({ frag: f, mesh: frag, tag, tagVal: -1 });
     });
+    this.refreshGrowth();
+  }
+
+  // scale frag colonies by maturity + keep the price tag value current
+  refreshGrowth() {
+    if (!this.fragEntries) return;
+    for (const e of this.fragEntries) {
+      const g = typeof e.frag === "string" ? 1 : (e.frag.growth ?? 1);
+      const rare = typeof e.frag === "string" ? false : !!e.frag.rare;
+      e.mesh.scale.setScalar((1.0 + g * 1.6) * (rare ? 1.15 : 1));
+      const it = item(typeof e.frag === "string" ? e.frag : e.frag.id);
+      const val = coralValue(it, g, rare);
+      if (e.tagVal !== val) {
+        e.tagVal = val;
+        e.tag.material.map = fragTagTexture(val, rare ? 0xffd400 : it.color);
+        e.tag.material.needsUpdate = true;
+      }
+    }
   }
 }

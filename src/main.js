@@ -3,7 +3,7 @@ import * as THREE from "three";
 import {
   CATALOG, item, DAY_LEN, CARE_DECAY_PER_DAY, xpForLevel, MAX_LEVEL,
   PALLET, REGISTER_ZONE, SHELF_ROWS, TANK_FISH_CAP, ROW_CAP, ACHIEVEMENTS, STAFF,
-  FRAG_CAP,
+  FRAG_CAP, CORAL_GROWTH_RATE, CORAL_RARE_CHANCE,
 } from "./data.js";
 import { buildRoom, TankUnit, ShelfUnit, createBoxMesh, loadFishAssets, loadCharacterModel, Checkout, createCustomerMesh, FeatureTank, FragRack } from "./world.js";
 import { RoomEnvironment } from "../lib/jsm/RoomEnvironment.js";
@@ -42,7 +42,11 @@ function defaultState() {
       { fish: [], care: 100 },
     ],
     shelves: [{ rows: emptyRows() }],
-    fragRacks: [{ frags: ["zoa", "mushroom", "duncan", "acan", "zoa", "torch"] }],
+    fragRacks: [{ frags: [
+      { id: "zoa", growth: 0.8, rare: false }, { id: "mushroom", growth: 0.4, rare: false },
+      { id: "duncan", growth: 0.6, rare: false }, { id: "acan", growth: 0.2, rare: false },
+      { id: "gsp", growth: 0.5, rare: false }, { id: "torch", growth: 0.3, rare: false },
+    ] }],
     prices,
     orders: [],   // { itemId, count, eta }
     boxes: [],    // { itemId, count, x, z } (+ mesh at runtime)
@@ -62,6 +66,7 @@ function serialize() {
   const s = game.state;
   return JSON.stringify({
     ...s,
+    lastTime: Date.now(), // for offline progression
     boxes: s.boxes.map((b) => ({ itemId: b.itemId, count: b.count, x: b.mesh.position.x, z: b.mesh.position.z })),
   });
 }
@@ -83,7 +88,21 @@ function loadState() {
     s.achievements = d.achievements || [];
     s.staff = { cashier: false, aquarist: false, stocker: false, ...d.staff };
     s.fragRacksOwned = d.fragRacksOwned ?? 1;
-    s.fragRacks = d.fragRacks || [{ frags: [] }];
+    s.fragRacks = (d.fragRacks || [{ frags: [] }]).map((rk) => ({
+      frags: (rk.frags || []).map((f) =>
+        typeof f === "string" ? { id: f, growth: 1, rare: false }
+          : { id: f.id, growth: f.growth ?? 1, rare: !!f.rare }),
+    }));
+    // offline progression: grow coral by the time the game was closed (cap 8h)
+    const elapsed = d.lastTime ? Math.min((Date.now() - d.lastTime) / 1000, 8 * 3600) : 0;
+    if (elapsed > 5) {
+      let grew = false;
+      for (const rk of s.fragRacks) for (const f of rk.frags) {
+        const ng = Math.min(1, f.growth + elapsed * CORAL_GROWTH_RATE);
+        if (ng > f.growth + 0.001) { f.growth = ng; grew = true; }
+      }
+      if (grew) s._offlineMin = Math.round(elapsed / 60);
+    }
     return s;
   } catch {
     return null;
@@ -165,6 +184,41 @@ game.spawnStaffMesh = (id, def) => {
   game.staffMeshes[id] = m;
 };
 
+// Coral farming: frags grow over time and gain value; maturing ones can
+// mutate into rare morphs.
+game.updateCoral = (dt) => {
+  for (const [i, rk] of game.state.fragRacks.entries()) {
+    let changed = false;
+    for (const f of rk.frags) {
+      if (f.growth < 1) {
+        const prev = f.growth;
+        f.growth = Math.min(1, f.growth + CORAL_GROWTH_RATE * dt);
+        changed = true;
+        if (prev < 1 && f.growth >= 1 && !f.rare && Math.random() < CORAL_RARE_CHANCE) {
+          f.rare = true;
+          game.ui.toast(`🌟 A ${item(f.id).name} grew into a rare morph!`, "good");
+        }
+      }
+    }
+    if (changed) game.fragRackUnits[i]?.refreshGrowth();
+  }
+};
+
+// Harvest: cut a frag off a mature colony (yields a new frag to grow/sell).
+game.fragCoral = (rackIdx) => {
+  const rk = game.state.fragRacks[rackIdx];
+  if (!rk || rk.frags.length >= FRAG_CAP) { game.ui.toast("Rack is full — sell some frags first.", "bad"); return; }
+  let best = null;
+  for (const f of rk.frags) if (f.growth >= 0.95 && (!best || f.growth > best.growth)) best = f;
+  if (!best) return;
+  rk.frags.push({ id: best.id, growth: 0, rare: false });
+  best.growth = 0.45; // colony cut back; it regrows
+  game.fragRackUnits[rackIdx].syncFrags(rk.frags);
+  game.sound.splash();
+  game.ui.toast(`🪸 Fragged a ${item(best.id).name} colony!`, "good");
+  game.save();
+};
+
 // Move one delivered box's contents onto a matching tank/shelf with room.
 game.autoStock = () => {
   const s = game.state;
@@ -182,7 +236,7 @@ game.autoStock = () => {
     const ri = s.fragRacks.findIndex((rk) => rk.frags.length < FRAG_CAP);
     if (ri === -1) return;
     const n = Math.min(box.count, FRAG_CAP - s.fragRacks[ri].frags.length);
-    for (let i = 0; i < n; i++) s.fragRacks[ri].frags.push(box.itemId);
+    for (let i = 0; i < n; i++) s.fragRacks[ri].frags.push({ id: box.itemId, growth: 0, rare: false });
     box.count -= n;
     game.fragRackUnits[ri].syncFrags(s.fragRacks[ri].frags);
   } else {
@@ -409,6 +463,10 @@ function init() {
   }
 
   if (isNew) game.ui.showIntro();
+  if (game.state._offlineMin) {
+    setTimeout(() => game.ui.toast(`🪸 While you were away (~${game.state._offlineMin} min), your coral grew!`, "good"), 800);
+    game.state._offlineMin = 0;
+  }
 
   addEventListener("resize", () => {
     game.camera.aspect = innerWidth / innerHeight;
@@ -480,6 +538,7 @@ function loop(now) {
     game.checkout.update(dt);
     updateStaff(dt);
     game.featureTank.update(dt);
+    game.updateCoral(dt);
     for (const t of game.tankUnits) t.update(dt);
   }
 
